@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "lib": ["es2021"],
+    "outDir": "out",
+    "inlineSourceMap": true,
+    "incremental": true,
+
+    "rootDir": "src",
+
+    "checkJs": false,
+    "strict": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "exclude": ["node_modules", ".vscode-test", "log"]
+}
