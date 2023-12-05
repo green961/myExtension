@@ -16,7 +16,48 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "wonderland.modelRelation",
+          "when": "editorLangId == prisma"
+        },
+        {
+          "command": "wonderland.packageReference",
+          "when": "editorLangId == csharp"
+        },
+        {
+          "command": "wonderland.ofFunction",
+          "when": "editorLangId == csharp"
+        },
+        {
+          "command": "wonderland.convertAsToBracket",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "wonderland.functionDeclaration",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "wonderland.multipleStatements",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "wonderland.InterfaceOrType",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "wonderland.CJ",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        }
+      ]
+    },
     "commands": [
+      {
+        "command": "wonderland.modelRelation",
+        "title": "Prisma modelRelation",
+        "category": "Wonderland"
+      },
       {
         "command": "wonderland.packageReference",
         "title": "CSharp packageReference",
@@ -28,8 +69,8 @@
         "category": "Wonderland"
       },
       {
-        "command": "wonderland.arrowFunction",
-        "title": "General arrowFunction",
+        "command": "wonderland.convertAsToBracket",
+        "title": "TSJS convertAsToBracket",
         "category": "Wonderland"
       },
       {
@@ -38,23 +79,23 @@
         "category": "Wonderland"
       },
       {
-        "command": "wonderland.ifMultipleStatements",
-        "title": "TSJS ifMultipleStatements",
+        "command": "wonderland.multipleStatements",
+        "title": "TSJS multipleStatements",
         "category": "Wonderland"
       },
       {
-        "command": "wonderland.multipleVariableAssignment",
-        "title": "TSJS multipleVariableAssignment",
+        "command": "wonderland.InterfaceOrType",
+        "title": "TSJS InterfaceOrType",
         "category": "Wonderland"
       },
       {
-        "command": "wonderland.convertBetweenInterfaceAndType",
-        "title": "TSJS convertBetweenInterfaceAndType",
+        "command": "wonderland.CJ",
+        "title": "TSJS CJ",
         "category": "Wonderland"
       },
       {
-        "command": "wonderland.implementInterface",
-        "title": "Golang implementInterface",
+        "command": "wonderland.arrowFunction",
+        "title": "arrowFunction",
         "category": "Wonderland"
       },
       {
@@ -72,12 +113,12 @@
       {
         "command": "wonderland.moveImportToTop",
         "key": "ctrl+up",
-        "when": "editorLangId == typescript"
+        "when": "editorLangId == typescript || editorLangId == javascript"
       },
       {
         "command": "wonderland.insertSemicolon",
         "key": ";",
-        "when": "editorLangId == csharp"
+        "when": "editorLangId == csharp || editorLangId == sql"
       },
       {
         "command": "wonderland.ctrlAltp",
@@ -104,24 +145,7 @@
         "key": "ctrl+g",
         "when": "editorTextFocus"
       }
-    ],
-    "configuration": {
-      "title": "WonderlandUtility",
-      "properties": {
-        "wonderlandUtility.showOrHide": {
-          "type": "boolean",
-          "default": true
-        },
-        "wonderlandUtility.autoSaveValue": {
-          "type": "string",
-          "default": "onFocusChange",
-          "enum": [
-            "onFocusChange",
-            "onWindowChange"
-          ]
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",

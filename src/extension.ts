@@ -55,15 +55,14 @@ export function activate(ctx: vscode.ExtensionContext) {
     const semi = ';'
     const { document, selections, selection } = editor
 
-    // document.getText(selection)
-
     if (selections.length === 1 && selection.start.line === selection.end.line) {
-      let line = selection.active.line
+      const { line } = selection.active
 
-      let pos = insertSemi(line)
-      if (pos !== -1) {
+      const pos = insertSemi(line)
+      if (pos) {
         editor.selection = new vscode.Selection(line, pos, line, pos)
       }
+
       return
     }
 
@@ -84,24 +83,83 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
 
     function insertSemi(lineIndex: number) {
-      let { text } = document.lineAt(lineIndex)
+      const { text } = document.lineAt(lineIndex)
 
-      let textTrimEnd = text.trimEnd()
-      const pos = textTrimEnd.length - 1
-      if (textTrimEnd[pos] !== semi) {
-        if (textTrimEnd) {
-          const insertPosition = new vscode.Position(lineIndex, text.length)
-          edit.insert(insertPosition, semi)
+      const textTrimEnd = text.trimEnd()
+      if (textTrimEnd) {
+        const pos = textTrimEnd.length - 1
+
+        if (textTrimEnd[pos] !== semi) {
+          return edit.insert(new vscode.Position(lineIndex, pos + 1), semi)
+        } else {
+          const long = textTrimEnd.slice(0, pos)
+          const short = long.trimEnd()
+          if (long !== short) {
+            let longPos = new vscode.Position(lineIndex, pos)
+            let shortPos = longPos.translate(0, short.length - long.length)
+
+            edit.delete(new vscode.Selection(longPos, shortPos))
+            editor.selection = new vscode.Selection(longPos, longPos)
+          } else {
+            return pos
+          }
         }
-        return -1
       }
-      return pos
+
+      // const pos = textTrimEnd.length - 1
+      // if (textTrimEnd[pos] !== semi) {
+      //   if (textTrimEnd) {
+      //     edit.insert(new vscode.Position(lineIndex, pos + 1), semi)
+      //   }
+      //   return -1
+      // }
+      // return pos
+    }
+  })
+
+  vscode.commands.registerTextEditorCommand('wonderland.modelRelation', (editor, edit) => {
+    const { document, selections } = editor
+    if (selections.length !== 2) return
+
+    function spcuLine(i = 0) {
+      const line = selections[i].active.line
+      const currentLine = document.lineAt(line)
+      const splitText = currentLine.text.trim().split(/\s+/)
+
+      return { splitText, currentLine, line }
+    }
+
+    let aa = spcuLine()
+    type spcuLineRT = ReturnType<typeof spcuLine>
+    let a1: spcuLineRT | undefined
+    let a2: spcuLineRT | undefined
+
+    if (aa.splitText.length === 1) {
+      a1 = aa
+      return done()
+    } else {
+      a2 = aa
+      return done(1, 0)
+    }
+
+    function done(a = 0, b = 1) {
+      const { currentLine, line } = a1 ?? spcuLine(a)
+      const { text: field, range, firstNonWhitespaceCharacterIndex: n } = currentLine
+
+      const { splitText: relaModel } = a2 ?? spcuLine(b)
+      const reference = relaModel.slice(0, 2)
+
+      const fieldWithType = `${field} ${reference[1]}`
+      const rela = `${repeatSpaces(n)} @relation(fields: [${field.trim()}], references: [${reference[0]}])`
+      edit.replace(range, [rela, fieldWithType].join('\n'))
+
+      let pos = new vscode.Position(line, n)
+      editor.selection = new vscode.Selection(pos, pos)
     }
   })
 
   vscode.commands.registerTextEditorCommand('wonderland.packageReference', async (editor) => {
     let content = await vscode.env.clipboard.readText()
-    // const langObject = getInstance(editor)
     const langObject = getInstance(editor.document.languageId as Language)
     let packageVersionRe = /dotnet add package (.*) --version (.*)/
     if (langObject?.languageId !== 'csharp' && !packageVersionRe.test(content)) return
@@ -121,6 +179,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       )
     })
   })
+
   vscode.commands.registerTextEditorCommand('wonderland.ofFunction', (editor, edit) => {
     const langObject = getInstance(editor.document.languageId as Language)
     if (langObject?.languageId !== 'csharp') return
@@ -175,12 +234,31 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
   })
 
-  vscode.commands.registerTextEditorCommand('wonderland.functionDeclaration', (editor, edit) => {
+  vscode.commands.registerTextEditorCommand('wonderland.convertAsToBracket', (editor, edit) => {
+    // 还是想得太简单了
     const langObject = getInstance(editor.document.languageId as Language)!
+    if (langObject?.languageId !== 'typescript') return
+
     const { document, selection } = editor
-    if (langObject.languageId !== 'javascript' && langObject?.languageId !== 'typescript') {
-      return
+    const line = selection.start.line
+    const { text, range } = document.lineAt(line)
+
+    let re = /^(.*?)(\w+)\s+as\s+([\w.]+)/
+
+    // input: '  } as Shell & Options&Fuck&Pussy,'
+    re = /^(.*?)(\w+)\s+as\s+([\w.]+(?:\s*&\s*[\w.]+)*)/
+
+    if (re.test(text)) {
+      const newString = text.replace(re, function (_match, p1, p2, p3) {
+        return `${p1}<${p3}>${p2}`
+      })
+
+      return edit.replace(range, newString)
     }
+  })
+
+  vscode.commands.registerTextEditorCommand('wonderland.functionDeclaration', (editor, edit) => {
+    const { document, selection } = editor
 
     const line = selection.start.line
     const { text, range } = document.lineAt(line)
@@ -259,31 +337,54 @@ export function activate(ctx: vscode.ExtensionContext) {
       edit.insert(new vscode.Position(startLine - 1, prevStart.text.length), to)
       edit.delete(selection)
     } else if (langObject?.languageId === 'javascript' || langObject?.languageId === 'typescript') {
-      let text = document.getText(selection)
-
-      let re = /^(\s*)function\s+(\w+)(\(.*?\))\s*{.*?\breturn\b(.*?)\s*}/s
-      if (re.test(text)) {
-        const newString = text.replace(re, function ak(_match, p1, p2, p3, p4) {
-          return `${p1}const ${p2} = ${p3} => ${p4}`
-        })
-
+      function rep(text: string, re: RegExp, selection: vscode.Selection | vscode.Range) {
+        const newString = text.replace(
+          re,
+          (_match, indent, p2, p3, p4) => `${indent}const ${p2} = ${p3} => ${p4}`
+        )
         return edit.replace(selection, newString)
       }
 
-      re = /^\s*{.*?\breturn\s+(.*?)\s*}/s
-      if (re.test(text)) {
-        const newString = re.exec(text)![1]
+      let text = document.getText(selection)
+      let re: RegExp
+      if (text) {
+        re = /^(\s*)function\s+(\w+)(\(.*?\))\s*{.*?\breturn\s+(.*?)\s*}/s
+        if (re.test(text)) {
+          return rep(text, re, selection)
+        }
 
-        return edit.replace(selection, newString)
+        re = /^\s*{.*?\breturn\s+(.*?)\s*}/s
+        if (re.test(text)) {
+          const newString = re.exec(text)![1]
+          return edit.replace(selection, newString)
+        }
+
+        re = /\bfunction\s+(\(.*?\))\s*{(.*)}/s
+        if (re.test(text)) {
+          const newString = text.replace(re, (_match, p1, p2: string) => `${p1} => ${p2.trim()}`)
+          return edit.replace(selection, newString)
+        }
+      }
+
+      if (selection.active.line !== selection.end.line) return
+
+      const lineIndex = selection.active.line
+      let line = document.lineAt(lineIndex)
+      text = line.text
+      re = /^(\s*)function\s+(\w+)(\(.*?\))\s*(.*)/
+      if (re.test(text)) {
+        return rep(text, re, line.range)
+      }
+
+      re = /\bfunction\s+(\(.*\))(.*)/
+      if (re.test(text)) {
+        const newString = text.replace(re, (_match, p1, p2) => `${p1} =>${p2}`)
+        return edit.replace(line.range, newString)
       }
     }
   })
 
   vscode.commands.registerTextEditorCommand('wonderland.moveImportToTop', (editor, edit) => {
-    const langObject = getInstance(editor.document.languageId as Language)
-    if (langObject?.languageId !== 'typescript') {
-      return
-    }
     const { document, selection } = editor
 
     let textLine = document.lineAt(selection.active.line)
@@ -293,37 +394,46 @@ export function activate(ctx: vscode.ExtensionContext) {
       return
     }
     edit.delete(textLine.rangeIncludingLineBreak)
-    edit.insert(new vscode.Position(0, 0), text.trimStart() + '\n')
+    edit.insert(new vscode.Position(1, 0), text.trimStart() + '\n')
   })
 
-  vscode.commands.registerTextEditorCommand('wonderland.ifMultipleStatements', (editor, edit) => {
-    const langObject = getInstance(editor.document.languageId as Language)
-    if (langObject?.languageId !== 'javascript' && langObject?.languageId !== 'typescript') {
-      return
-    }
-
+  vscode.commands.registerTextEditorCommand('wonderland.multipleStatements', (editor, edit) => {
     const { document, selection } = editor
-    let line = selection.active.line
-    let selectionLine = document.lineAt(line)
+    const indent = '  '
 
-    let text = selectionLine.text
-    let exist = text.match(/(\s*)(if\s*\(.*\))(.*)/)
-    let tabSize = vscode.workspace.getConfiguration('editor', document.uri).get<number>('tabSize', 2)
-    let cc = ' '.repeat(tabSize)
-    if (exist) {
-      let [, indent, ifStatement, statement] = exist
-      statement = statement.trim()
+    const lineIndex = selection.active.line
+    const textLine = document.lineAt(lineIndex)
+    const { text: lineContent } = textLine
+    const preSpaces = repeatSpaces(textLine.firstNonWhitespaceCharacterIndex)
 
-      let concatStr = [`${ifStatement} {`, `${cc}${statement}`, '}'].map((e) => `${indent}${e}`).join('\n')
+    if (/^\s*(?:if|while)\b/.test(lineContent)) {
+      const [end, single] = matchBracket(lineContent)
+      const range = new vscode.Range(lineIndex, end, lineIndex, Infinity)
 
-      edit.replace(selectionLine.range, concatStr)
-    } else {
-      let preLine = document.lineAt(line - 1)
-      edit.insert(new vscode.Position(line - 1, preLine.text.length), ' {')
-
-      let n = preLine.firstNonWhitespaceCharacterIndex
-      edit.insert(new vscode.Position(line, text.length), `\n${' '.repeat(n)}}`)
+      edit.replace(range, [` {`, `${preSpaces}${indent}${single}`, `${preSpaces}}`].join('\n'))
     }
+
+    // 把单行箭头函数转为多行语句 用官方的就好
+    // Add braces to arrow function
+    // let text = document.getText(selection)
+    // let re = /(.*=>\s*)(.*)/
+    // if (text && re.test(text)) {
+    //   const newString = text.replace(re, (_match, p1, p2) =>
+    //     [`${p1}{`, `${preSpaces}${indent}return ${p2}`, `${preSpaces}}`].join('\n')
+    //   )
+
+    //   editor.selection = new vscode.Selection(selection.anchor, selection.anchor)
+    //   return edit.replace(selection, newString)
+    // }
+
+    // 先放一放, 等碰到了相关场景再来修改
+    // else {
+    //   let preLine = document.lineAt(line - 1)
+    //   edit.insert(new vscode.Position(line - 1, preLine.text.length), ' {')
+
+    //   let n = preLine.firstNonWhitespaceCharacterIndex
+    //   edit.insert(new vscode.Position(line, text.length), `\n${' '.repeat(n)}}`)
+    // }
   })
 
   vscode.commands.registerTextEditorCommand('wonderland.multipleVariableAssignment', (editor, edit) => {
@@ -333,10 +443,11 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     const { document, selection } = editor
 
-    const textArray = document
-      .getText(selection)
-      .split('\n')
-      .filter((e) => e.trim())
+    const selectionText = document.getText(selection)
+    if (!selectionText) {
+      return
+    }
+    const textArray = selectionText.split('\n').filter((e) => e.trim())
 
     let keys: string[] = []
     let values: string[] = []
@@ -347,7 +458,25 @@ export function activate(ctx: vscode.ExtensionContext) {
     edit.replace(selection, `;[${keys.join(',')}] = [${values.join(',')}]`)
   })
 
-  vscode.commands.registerTextEditorCommand('wonderland.convertBetweenInterfaceAndType', (editor, edit) => {
+  vscode.commands.registerTextEditorCommand('wonderland.CJ', (editor, edit) => {
+    const langObject = getInstance(editor.document.languageId as Language)
+    const { document, selection } = editor
+    const line = selection.start.line
+    const { text, range } = document.lineAt(line)
+
+    const join = langObject?.letConst.join('|')
+    const re = new RegExp(String.raw`^(\s*(?:${join})\s+)(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
+
+    if (re.test(text)) {
+      const newString = text.replace(re, (_match, prefix, dest, p3, src) => {
+        let w = dest === src ? dest : `${src}: ${dest}`
+        return `${prefix}{ ${w} } = ${p3}`
+      })
+
+      return edit.replace(range, newString)
+    }
+  })
+  vscode.commands.registerTextEditorCommand('wonderland.InterfaceOrType', (editor, edit) => {
     const langObject = getInstance(editor.document.languageId as Language)
     if (!langObject) {
       return
@@ -484,4 +613,25 @@ export function activate(ctx: vscode.ExtensionContext) {
     })
   )
 }
+
+function repeatSpaces(space: number) {
+  return ' '.repeat(space)
+}
+
+function matchBracket(line: string): [number, string] {
+  const [mLeft, mRight] = '()'
+  const len = line.length
+  let i = line.indexOf(mLeft) + 1
+  let layer = 1
+
+  for (; i < len; i++) {
+    const c = line[i]
+    if (layer === 0) {
+      break
+    } else if (c === mLeft) layer++
+    else if (c === mRight) layer--
+  }
+  return [i, line.slice(i).trim()]
+}
+
 export function deactivate() {}

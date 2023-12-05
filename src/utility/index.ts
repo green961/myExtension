@@ -1,3 +1,4 @@
+#! /   usr/bin/env     node
 import { commonUtility } from './utilityCommon'
 import { pyUtility } from './utilityPY'
 import { cfgUtility } from './utilityCFG'
@@ -12,8 +13,11 @@ export const LanguageInstances = {
   jsonc: commonUtility,
   csharp: commonUtility,
   go: commonUtility,
+  sql: commonUtility,
+  prisma: commonUtility,
   html: htmlUtility,
   markdown: commonUtility,
+  log: commonUtility,
   python: pyUtility,
   properties: cfgUtility,
   shellscript: shUtility,

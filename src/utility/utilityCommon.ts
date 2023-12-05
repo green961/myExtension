@@ -18,7 +18,6 @@ export class commonUtility extends Base implements Remove {
       return
     }
 
-    // const document = editor.document
     const removeRanges: Range[] = []
     const { selection, selections, document } = editor
 
@@ -39,29 +38,39 @@ export class commonUtility extends Base implements Remove {
     }
     if (startLine === endLine) return
 
+    const mulComments = (currentLine: number, text: string) => {
+      let start: [number, number] = [currentLine, text.indexOf(this.multiLineComments[0])]
+
+      let multiLineCommentsOfEnd = this.multiLineComments[1]
+
+      while (text.indexOf(multiLineCommentsOfEnd) === -1) {
+        currentLine++
+        ;({ text } = this.textAndLine(document, currentLine))
+      }
+
+      let offset = text.indexOf(multiLineCommentsOfEnd) + multiLineCommentsOfEnd.length
+      removeRanges.push(new vscode.Range(...start, currentLine, offset))
+      return currentLine
+    }
+
     for (let currentLine = startLine; currentLine <= endLine; currentLine++) {
       let { line, trimText, text } = this.textAndLine(document, currentLine)
       if (trimText.length === 0) continue
-      if (trimText.startsWith(this.singleLineComment as string)) {
+      if (trimText.startsWith(this.singleLineComment)) {
         if (trimText[trimText.length - 1] !== this.preserveFlag)
           removeRanges.push(line.rangeIncludingLineBreak)
       } else if (trimText.startsWith(this.multiLineComments[0])) {
-        let start: [number, number] = [currentLine, text.indexOf(this.multiLineComments[0])]
-
-        let multiLineCommentsOfEnd = this.multiLineComments[1]
-
-        while (text.indexOf(multiLineCommentsOfEnd) === -1) {
-          currentLine++
-          ;({ text } = this.textAndLine(document, currentLine))
-        }
-
-        let offset = text.indexOf(multiLineCommentsOfEnd) + multiLineCommentsOfEnd.length
-        removeRanges.push(new vscode.Range(...start, currentLine, offset))
+        currentLine = mulComments(currentLine, text)
       }
     }
 
     removeRanges.forEach((e) => {
       edit.delete(e)
     })
+
+    editor.selection = new vscode.Selection(selection.active, selection.active)
+    if (selection.start.line === 0 && selection.end.line === document.lineCount - 1) {
+      vscode.commands.executeCommand('workbench.action.files.save')
+    }
   }
 }

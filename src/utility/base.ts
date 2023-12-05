@@ -34,20 +34,22 @@ export class Base {
   readonly preserveFlag = '￥'
   readonly singCommRE = new RegExp(String.raw`(?<=^\s*)(?:${this.singleLineComment}\s*)`)
   startDetection?: RegExp
-  declareVariableKeywords = ['var']
+  letConst = ['var']
+  letConstType?: string[]
   public embeddedLanguage: Language
 
   constructor(public singleLineComment: string, readonly languageId: Language) {
     this.embeddedLanguage = languageId
 
     if (languageId === 'javascript') {
-      this.declareVariableKeywords = ['let', 'const']
+      this.letConst = ['let', 'const']
       this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-check`)
     } else if (languageId === 'typescript') {
       this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-nocheck`)
-      this.declareVariableKeywords = ['let', 'const', 'type']
+      this.letConst = ['let', 'const']
+      this.letConstType = ['let', 'const', 'type']
     } else if (languageId === 'vue') {
-      this.declareVariableKeywords = ['let', 'const', 'type']
+      this.letConst = ['let', 'const', 'type']
     }
   }
 
@@ -101,54 +103,69 @@ export class Base {
       if (t0 || t1) {
         if (t0 && t1) {
           // 两个选中内容之间的交换
-          // let currentSelection = t0.length > t1.length ? selections[0] : selections[1]
 
           let values = [t1, t0]
           selections.forEach((selection, i) => {
             edit.replace(selection, values[i])
           })
-          // editor.selection = new vscode.Selection(currentSelection.end, currentSelection.end)
-          // editor.selection = new vscode.Selection(selection.active, selection.active)
           editor.selection = new vscode.Selection(selection.end, selection.end)
         } else {
-          // 复制选中内容到指定位置
           let { isEmpty, notEmpty } = this.emptyAndNotEmpty(document, selections)
           let value = document.getText(notEmpty)
 
-          // vscode.commands.executeCommand('editor.action.clipboardCopyAction')
           if (!value.includes('\n')) {
             vscode.env.clipboard.writeText(value.trim())
           }
 
-          // const darwinPlatforms=new Set<DownloadPlatform>(['
-          // /^[0-9]+\.[0-9]+\.[0-9]$/.test(version)
           edit.insert(isEmpty.active, value)
           editor.selection = new vscode.Selection(isEmpty.active, isEmpty.active)
         }
       } else {
-        // 两行之间交换, 如果有一行为空行则把 position 放在有内容的一行
-        let position = selection.active
+        // 两行之间交换. 如果有一个光标处在行首或者行尾, 则把另一行的内容移动过来
+        let emptyPosition: vscode.Position | undefined
+        let deleteLine: vscode.TextLine | undefined
+        let copyLine = ''
+        selections.forEach((e) => {
+          const { line, character } = e.active
+          const currentLine = document.lineAt(line)
+          const { text } = currentLine
 
-        let arr = selections.map((e) => {
-          const currentLine = document.lineAt(e.active.line)
+          const [before, after] = [text.slice(0, character), text.slice(character)]
 
-          if (!currentLine.text.trim()) {
-            position = e.active
+          if (!after.trim()) {
+            emptyPosition = new vscode.Position(line, text.length)
+          } else if (!before.trim()) {
+            const pre = line - 1
+            emptyPosition = new vscode.Position(pre, document.lineAt(pre).text.length)
+          } else {
+            copyLine = text
+            deleteLine = currentLine
           }
-          return currentLine
         })
 
-        edit.replace(arr[0].range, arr[1].text)
-        edit.replace(arr[1].range, arr[0].text)
-        editor.selection = new vscode.Selection(position, position)
+        if (emptyPosition && deleteLine) {
+          edit.insert(emptyPosition, '\n' + copyLine)
+          editor.selection = new vscode.Selection(emptyPosition, emptyPosition)
+          edit.delete(deleteLine.rangeIncludingLineBreak)
+        } else {
+          let lines = selections.map((e) => document.lineAt(e.active.line))
+          edit.replace(lines[0].range, lines[1].text)
+          edit.replace(lines[1].range, lines[0].text)
+          editor.selection = new vscode.Selection(selection.active, selection.active)
+        }
       }
     } else {
       const selection = editor.selection
       let lineIndex = selection.active.line
       let { text, line } = this.textAndLine(editor.document, lineIndex)
 
-      // 删除当前行内容，保留缩进 ￥
-      const spaces = text.match(/^(?:\s*)/)![0]
+      // 删除当前行内容，保留缩进
+      const spaces = text.match(/^(?:\s*)(?=\S)/)?.[0] ?? ''
+      // text.match(/^(?:\s*)\S/)
+      // if (spaces) {
+      // x(?=y)
+
+      // }
       edit.replace(line.range, spaces)
       editor.selection = new vscode.Selection(lineIndex, spaces.length, lineIndex, spaces.length)
     }
@@ -159,14 +176,7 @@ export class Base {
     const lineIndex = selection.active.line
 
     const { text } = this.textAndLine(doc, lineIndex)
-    if (selection.active.character !== text.length) {
-      editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
-    }
-    // 再按一次回到行首, 鸡肋
-    // else {
-    //   let first = line.firstNonWhitespaceCharacterIndex
-    //   editor.selection = new vscode.Selection(lineIndex, first, lineIndex, first)
-    // }
+    editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
   }
 
   async ctrlPlusn(editor: TextEditor, edit: TextEditorEdit) {
@@ -175,24 +185,9 @@ export class Base {
     let end_of_line = lineEndings[vscode.EndOfLine[document.eol]]
 
     if (selections.length === 1) {
-      if (selection.isEmpty) {
-        // 单行，先备份再修改
-        let { text: currentLineText, isEmptyOrWhitespace } = document.lineAt(startLine)
-        if (isEmptyOrWhitespace) {
-          return
-        }
-
-        edit.insert(
-          new vscode.Position(startLine, 0),
-          `${this.addComments(
-            currentLineText,
-            checkVue(this.languageId, document, startLine)
-          )}${end_of_line}`
-        )
-      } else if (startLine !== selection.end.line) {
+      if (startLine !== selection.end.line && !selection.start.character) {
         // 多行，先备份再修改
 
-        // let lang: Language = this.languageId!
         if (this.languageId === 'html' || checkVue(this.languageId, document, startLine) === 'html') {
           let [start, end] = singleLineComment()
           let indentSpaces = document.lineAt(startLine).firstNonWhitespaceCharacterIndex
@@ -210,8 +205,35 @@ export class Base {
           .join(end_of_line)
         edit.insert(selection.start, concatStr)
       } else {
-        // 提取表达式（放在上一行）￥
-        this.extractVariable(startLine - 1, document, selection, edit)
+        // 单行，先备份再修改
+        let { text: currentLineText, isEmptyOrWhitespace } = document.lineAt(startLine)
+        if (isEmptyOrWhitespace) return
+        if (currentLineText.trim().startsWith(this.singleLineComment)) {
+          let i = currentLineText.indexOf(this.singleLineComment)
+          let j = i + this.singleLineComment.length
+          for (; j < currentLineText.length; j++) {
+            if (currentLineText[j] === ' ') {
+              continue
+            }
+            break
+          }
+
+          // edit.insert(new vscode.Position(startLine - 1, Infinity), `${end_of_line}${currentLineText}`)
+          edit.insert(new vscode.Position(startLine, 0), `${currentLineText}${end_of_line}`)
+          edit.delete(
+            new vscode.Range(new vscode.Position(startLine, i), new vscode.Position(startLine, j))
+          )
+
+          return
+        }
+
+        return edit.insert(
+          new vscode.Position(startLine, 0),
+          `${this.addComments(
+            currentLineText,
+            checkVue(this.languageId, document, startLine)
+          )}${end_of_line}`
+        )
       }
     } else {
       if (selections.some((selection) => document.getText(selection))) {
@@ -283,9 +305,7 @@ export class Base {
     let partOfString = String.raw`(\w+\s+)?`
 
     if (this.languageId !== 'csharp') {
-      partOfString = this.declareVariableKeywords?.length
-        ? `((?:${this.declareVariableKeywords.join('|')})\\s+)?`
-        : ''
+      partOfString = this.letConst?.length ? `((?:${this.letConst.join('|')})\\s+)?` : ''
     }
     re = new RegExp(String.raw`^(\s*)${partOfString}(\w+)`)
 
@@ -304,7 +324,7 @@ export class Base {
         edit.replace(firstRange, `${indent}${variableName}${goUnique}${doc.getText(selection)}`)
         edit.replace(secondRange, variableName)
         return
-      } else declaWord = `${this.declareVariableKeywords[0]} `
+      } else declaWord = `${this.letConst[0]} `
     } else {
       if (this.languageId === 'python') {
         ;[declaWord, variableName] = ['', declaWord]
