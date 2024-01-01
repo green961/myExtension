@@ -19,8 +19,16 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "wonderland.modelRelation",
-          "when": "editorLangId == prisma"
+          "command": "wonderland.CSS",
+          "when": "editorLangId == typescriptreact"
+        },
+        {
+          "command": "wonderland.removeClosingTag",
+          "when": "editorLangId == typescriptreact"
+        },
+        {
+          "command": "wonderland.SORT",
+          "when": "editorLangId == snippets || editorLangId == jsonc"
         },
         {
           "command": "wonderland.packageReference",
@@ -54,43 +62,53 @@
     },
     "commands": [
       {
-        "command": "wonderland.modelRelation",
-        "title": "Prisma modelRelation",
+        "command": "wonderland.CSS",
+        "title": "CSS",
+        "category": "Wonderland"
+      },
+      {
+        "command": "wonderland.removeClosingTag",
+        "title": "removeClosingTag",
+        "category": "Wonderland"
+      },
+      {
+        "command": "wonderland.SORT",
+        "title": "SORT",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.packageReference",
-        "title": "CSharp packageReference",
+        "title": "packageReference",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.ofFunction",
-        "title": "CSharp ofFunction",
+        "title": "ofFunction",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.convertAsToBracket",
-        "title": "TSJS convertAsToBracket",
+        "title": "convertAsToBracket",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.functionDeclaration",
-        "title": "TSJS functionDeclaration",
+        "title": "functionDeclaration",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.multipleStatements",
-        "title": "TSJS multipleStatements",
+        "title": "multipleStatements",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.InterfaceOrType",
-        "title": "TSJS InterfaceOrType",
+        "title": "InterfaceOrType",
         "category": "Wonderland"
       },
       {
         "command": "wonderland.CJ",
-        "title": "TSJS CJ",
+        "title": "CJ",
         "category": "Wonderland"
       },
       {
@@ -118,7 +136,7 @@
       {
         "command": "wonderland.insertSemicolon",
         "key": ";",
-        "when": "editorLangId == csharp || editorLangId == sql"
+        "when": "editorLangId ==csharp || editorLangId == sql|| editorLangId == css"
       },
       {
         "command": "wonderland.ctrlAltp",
@@ -138,6 +156,11 @@
       {
         "command": "wonderland.ctrlPlusy",
         "key": "ctrl+y",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "wonderland.ctrlPlusq",
+        "key": "ctrl+q",
         "when": "editorTextFocus"
       },
       {

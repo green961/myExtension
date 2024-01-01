@@ -117,45 +117,52 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
   })
 
-  vscode.commands.registerTextEditorCommand('wonderland.modelRelation', (editor, edit) => {
-    const { document, selections } = editor
-    if (selections.length !== 2) return
+  vscode.commands.registerTextEditorCommand('wonderland.CSS', (editor, edit) => {
+    console.log()
+    const { document, selection } = editor
 
-    function spcuLine(i = 0) {
-      const line = selections[i].active.line
-      const currentLine = document.lineAt(line)
-      const splitText = currentLine.text.trim().split(/\s+/)
+    const line = selection.active.line
+    const textLine = document.lineAt(line)
+    const { text } = textLine
 
-      return { splitText, currentLine, line }
-    }
+    // editor.selection = new vscode.Selection(line, Infinity, line, Infinity)
+    // let pos = new vscode.Position(line, Infinity)
+    let pos = new vscode.Position(line, text.length)
+    // editor.selection = new vscode.Selection(selection.active, pos)
+    editor.selection = new vscode.Selection(pos, pos)
+    let s = new vscode.Selection(line, textLine.firstNonWhitespaceCharacterIndex, line, text.indexOf("'"))
 
-    let aa = spcuLine()
-    type spcuLineRT = ReturnType<typeof spcuLine>
-    let a1: spcuLineRT | undefined
-    let a2: spcuLineRT | undefined
+    edit.delete(s)
+  })
+  vscode.commands.registerTextEditorCommand('wonderland.removeClosingTag', (editor, edit) => {
+    const { document, selection } = editor
 
-    if (aa.splitText.length === 1) {
-      a1 = aa
-      return done()
-    } else {
-      a2 = aa
-      return done(1, 0)
-    }
+    const line = selection.active.line
+    const textLine = document.lineAt(line)
+    const { text, range } = textLine
+    const dst = text.replace(/<\s*[a-zA-Z\d]+\s+(.*?)>.*/, '<div $1 />')
 
-    function done(a = 0, b = 1) {
-      const { currentLine, line } = a1 ?? spcuLine(a)
-      const { text: field, range, firstNonWhitespaceCharacterIndex: n } = currentLine
+    edit.replace(range, dst)
+  })
+  vscode.commands.registerTextEditorCommand('wonderland.SORT', (editor, edit) => {
+    const { document, selection } = editor
 
-      const { splitText: relaModel } = a2 ?? spcuLine(b)
-      const reference = relaModel.slice(0, 2)
+    let [, quote, src] = document.getText(selection).match(/("?)(.+)\1/)!
+    // src = src.slice(2)
+    src = src.replace('--', '')
+    const dst = [
+      ...new Set(
+        src
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          // .map((e) => e.toLowerCase())
+          .filter((e) => e.length > 4)
+      ),
+    ]
+      .sort()
+      .join(',')
 
-      const fieldWithType = `${field} ${reference[1]}`
-      const rela = `${repeatSpaces(n)} @relation(fields: [${field.trim()}], references: [${reference[0]}])`
-      edit.replace(range, [rela, fieldWithType].join('\n'))
-
-      let pos = new vscode.Position(line, n)
-      editor.selection = new vscode.Selection(pos, pos)
-    }
+    edit.replace(selection, `${quote}--${dst}${quote}`)
   })
 
   vscode.commands.registerTextEditorCommand('wonderland.packageReference', async (editor) => {
@@ -336,7 +343,11 @@ export function activate(ctx: vscode.ExtensionContext) {
       let prevStart = document.lineAt(startLine - 1)
       edit.insert(new vscode.Position(startLine - 1, prevStart.text.length), to)
       edit.delete(selection)
-    } else if (langObject?.languageId === 'javascript' || langObject?.languageId === 'typescript') {
+    } else if (
+      langObject?.languageId === 'javascript' ||
+      langObject?.languageId === 'typescript' ||
+      langObject?.languageId === 'typescriptreact'
+    ) {
       function rep(text: string, re: RegExp, selection: vscode.Selection | vscode.Range) {
         const newString = text.replace(
           re,
@@ -587,9 +598,20 @@ export function activate(ctx: vscode.ExtensionContext) {
   )
 
   ctx.subscriptions.push(
-    vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusg', (editor) => {
+    vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusg', (editor, edit) => {
       const langObject = getInstance(editor.document.languageId as Language)
-      langObject?.ctrlPlusg(editor)
+      langObject?.ctrlPlusg(editor, edit)
+    })
+  )
+  ctx.subscriptions.push(
+    vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusq', (editor, edit) => {
+      const langObject = getInstance(editor.document.languageId as Language)!
+
+      const text = langObject.rewriteLine(editor, edit)
+
+      if (text) {
+        vscode.env.clipboard.writeText(text)
+      }
     })
   )
 

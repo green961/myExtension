@@ -122,6 +122,9 @@ export class Base {
         }
       } else {
         // 两行之间交换. 如果有一个光标处在行首或者行尾, 则把另一行的内容移动过来
+        if (selections[0].active.line === selections[1].active.line) {
+          return this.rewriteLine(editor, edit)
+        }
         let emptyPosition: vscode.Position | undefined
         let deleteLine: vscode.TextLine | undefined
         let copyLine = ''
@@ -155,28 +158,46 @@ export class Base {
         }
       }
     } else {
-      const selection = editor.selection
-      let lineIndex = selection.active.line
-      let { text, line } = this.textAndLine(editor.document, lineIndex)
-
-      // 删除当前行内容，保留缩进
-      const spaces = text.match(/^(?:\s*)(?=\S)/)?.[0] ?? ''
-      // text.match(/^(?:\s*)\S/)
-      // if (spaces) {
-      // x(?=y)
-
-      // }
-      edit.replace(line.range, spaces)
-      editor.selection = new vscode.Selection(lineIndex, spaces.length, lineIndex, spaces.length)
+      this.rewriteLine(editor, edit)
     }
   }
 
-  ctrlPlusg(editor: TextEditor) {
+  rewriteLine(editor: vscode.TextEditor, edit: vscode.TextEditorEdit): string | undefined {
+    const selection = editor.selection
+    let lineIndex = selection.active.line
+    let { text, line } = this.textAndLine(editor.document, lineIndex)
+
+    // 删除当前行内容，    保留缩进
+    // 如果仅仅只有空格, 不保留缩进, 移到行首
+    // const [spaces, content] = text.match(/^(?:\s*)(?=\S)/)?.[0] ?? ''
+    let [, spaces, content] = text.match(/^(\s*)(\S.*)?/)!
+
+    if (!content) spaces = ''
+
+    edit.replace(line.range, spaces)
+    editor.selection = new vscode.Selection(lineIndex, spaces.length, lineIndex, spaces.length)
+    return content?.trimEnd()
+  }
+
+  ctrlPlusg(editor: TextEditor, edit: TextEditorEdit) {
     const { document: doc, selection } = editor
     const lineIndex = selection.active.line
-
     const { text } = this.textAndLine(doc, lineIndex)
-    editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
+    const re = /^(\s*)(get)(\s*=>\s*.*)(;)/
+    if (re.test(text)) {
+      const newString = text.replace(re, function (_match, p1, _, p3) {
+        return `${p1}set${p3} = value;\n`
+        // return `\n${p1}set${p3} = value;`
+      })
+
+      const pos = new vscode.Position(lineIndex + 1, 0)
+      // const pos = new vscode.Position(lineIndex, text.length)
+      edit.insert(pos, newString)
+      editor.selection = new vscode.Selection(pos, pos)
+      // editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
+    } else {
+      editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
+    }
   }
 
   async ctrlPlusn(editor: TextEditor, edit: TextEditorEdit) {
@@ -198,8 +219,11 @@ export class Base {
           )
         }
 
-        let concatStr = document
-          .getText(selection)
+        let concatStr = document.getText(selection)
+        if (concatStr.slice(-1) !== end_of_line) {
+          concatStr += end_of_line
+        }
+        concatStr = concatStr
           .split(/\r?\n/)
           .map((s) => (s.trim() ? `${this.singleLineComment} ` + s : s))
           .join(end_of_line)
