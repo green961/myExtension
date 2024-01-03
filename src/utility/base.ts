@@ -122,6 +122,7 @@ export class Base {
         }
       } else {
         // 两行之间交换. 如果有一个光标处在行首或者行尾, 则把另一行的内容移动过来
+        console.log('hello')
         if (selections[0].active.line === selections[1].active.line) {
           return this.rewriteLine(editor, edit)
         }
