@@ -41,15 +41,25 @@ export class Base {
   constructor(public singleLineComment: string, readonly languageId: Language) {
     this.embeddedLanguage = languageId
 
-    if (languageId === 'javascript') {
-      this.letConst = ['let', 'const']
-      this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-check`)
-    } else if (languageId === 'typescript') {
-      this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-nocheck`)
-      this.letConst = ['let', 'const']
-      this.letConstType = ['let', 'const', 'type']
-    } else if (languageId === 'vue') {
-      this.letConst = ['let', 'const', 'type']
+    switch (languageId) {
+      case 'rust':
+        this.letConst = ['let']
+        return
+      case 'javascript':
+        this.letConst = ['let', 'const']
+        this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-check`)
+        return
+      case 'typescript':
+        this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-nocheck`)
+        this.letConst = ['let', 'const']
+        this.letConstType = ['let', 'const', 'type']
+        return
+      case 'vue':
+        this.letConst = ['let', 'const', 'type']
+        return
+      case 'yaml':
+        this.singleLineComment = '#'
+        return
     }
   }
 
@@ -122,33 +132,41 @@ export class Base {
         }
       } else {
         // 两行之间交换. 如果有一个光标处在行首或者行尾, 则把另一行的内容移动过来
-        console.log('hello')
         if (selections[0].active.line === selections[1].active.line) {
           return this.rewriteLine(editor, edit)
         }
         let emptyPosition: vscode.Position | undefined
         let deleteLine: vscode.TextLine | undefined
-        let copyLine = ''
+        let copyLineText = ''
         selections.forEach((e) => {
-          const { line, character } = e.active
+          let { line, character } = e.active
           const currentLine = document.lineAt(line)
           const { text } = currentLine
+
+          if (!deleteLine && !text.trim()) {
+            deleteLine = currentLine
+            if (!emptyPosition) {
+              emptyPosition = new vscode.Position(line, text.length)
+            }
+
+            return
+          }
 
           const [before, after] = [text.slice(0, character), text.slice(character)]
 
           if (!after.trim()) {
             emptyPosition = new vscode.Position(line, text.length)
           } else if (!before.trim()) {
-            const pre = line - 1
-            emptyPosition = new vscode.Position(pre, document.lineAt(pre).text.length)
+            // --放前面立即自减, 保证前后一致的`line`值
+            emptyPosition = new vscode.Position(--line, document.lineAt(line).text.length)
           } else {
-            copyLine = text
+            copyLineText = text
             deleteLine = currentLine
           }
         })
 
         if (emptyPosition && deleteLine) {
-          edit.insert(emptyPosition, '\n' + copyLine)
+          edit.insert(emptyPosition, '\n' + copyLineText)
           editor.selection = new vscode.Selection(emptyPosition, emptyPosition)
           edit.delete(deleteLine.rangeIncludingLineBreak)
         } else {
@@ -207,7 +225,8 @@ export class Base {
     let end_of_line = lineEndings[vscode.EndOfLine[document.eol]]
 
     if (selections.length === 1) {
-      if (startLine !== selection.end.line && !selection.start.character) {
+      // if (startLine !== selection.end.line && !selection.start.character) {
+      if (startLine !== selection.end.line) {
         // 多行，先备份再修改
 
         if (this.languageId === 'html' || checkVue(this.languageId, document, startLine) === 'html') {
@@ -224,11 +243,20 @@ export class Base {
         if (concatStr.slice(-1) !== end_of_line) {
           concatStr += end_of_line
         }
-        concatStr = concatStr
-          .split(/\r?\n/)
-          .map((s) => (s.trim() ? `${this.singleLineComment} ` + s : s))
-          .join(end_of_line)
-        edit.insert(selection.start, concatStr)
+        const lines = concatStr.split(/\r?\n/)
+
+        const firstLine = lines[0]
+        if (firstLine.trim().startsWith(this.singleLineComment)) {
+          const findComment = new RegExp(String.raw`^\s*(${this.singleLineComment}\s*)`)
+          const comment = findComment.exec(firstLine)![1]
+          concatStr = lines.map((s) => (s.trim() ? s.replace(comment, '') : s)).join(end_of_line)
+          edit.insert(selection.end, concatStr)
+          editor.selection = new vscode.Selection(selection.end, selection.end)
+        } else {
+          concatStr = lines.map((s) => (s.trim() ? `${this.singleLineComment} ` + s : s)).join(end_of_line)
+
+          edit.insert(selection.start, concatStr)
+        }
       } else {
         // 单行，先备份再修改
         let { text: currentLineText, isEmptyOrWhitespace } = document.lineAt(startLine)
@@ -243,7 +271,6 @@ export class Base {
             break
           }
 
-          // edit.insert(new vscode.Position(startLine - 1, Infinity), `${end_of_line}${currentLineText}`)
           edit.insert(new vscode.Position(startLine, 0), `${currentLineText}${end_of_line}`)
           edit.delete(
             new vscode.Range(new vscode.Position(startLine, i), new vscode.Position(startLine, j))
@@ -356,7 +383,12 @@ export class Base {
       }
     }
 
-    edit.replace(firstRange, `${indent}${declaWord}${variableName} = ${doc.getText(selection)}${end}`)
+    edit.replace(
+      firstRange,
+      `${indent}${declaWord}${variableName} = ${doc.getText(selection)}${end}${
+        this.languageId === 'rust' ? ';' : ''
+      }`
+    )
     edit.replace(secondRange, variableName)
   }
 

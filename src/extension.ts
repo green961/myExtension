@@ -5,6 +5,7 @@ import { lineEndings } from './utility/base'
 import * as vscode from 'vscode'
 import { LanguageInstances } from './utility'
 import { StatusBar, AutoSave } from './save/autoSave'
+// import { fuck } from './aa'
 
 type LanguageTypes = keyof typeof LanguageInstances
 type Instances = {
@@ -26,16 +27,18 @@ function getLangObject<K extends LanguageTypes>(key: K): Instances[K] {
 export function activate(ctx: vscode.ExtensionContext) {
   // ctx.subscriptions.push(new DocumentWatcher())
 
+  // fuck(ctx)
+
   if (vscode.workspace.workspaceFolders) {
     let statusBar = new StatusBar()
     ctx.subscriptions.push(
       vscode.commands.registerCommand('wonderland.focusChange', () => {
-        vscode.workspace
-          .getConfiguration()
-          .update(
-            'files.autoSave',
-            statusBar.current === 'onFocusChange' ? AutoSave.off : AutoSave.onFocusChange
-          )
+        const config = vscode.workspace.getConfiguration()
+        config.update(
+          'files.autoSave',
+          statusBar.current === 'onFocusChange' ? AutoSave.off : AutoSave.onFocusChange
+        )
+        config.update('editor.formatOnSave', true)
       })
     )
     ctx.subscriptions.push(
@@ -58,9 +61,17 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (selections.length === 1 && selection.start.line === selection.end.line) {
       const { line } = selection.active
 
-      const pos = insertSemi(line)
+      const textLine = document.lineAt(line)
+      const pos = insertSemiAtEnd(line)
       if (pos) {
-        editor.selection = new vscode.Selection(line, pos, line, pos)
+        const char = selection.active.character
+        const { text } = textLine
+
+        if (getSemiPair(text).some(([start, end]) => char > start && char <= end)) {
+          edit.insert(selection.active, ';')
+        } else {
+          editor.selection = new vscode.Selection(line, pos, line, pos)
+        }
       }
 
       return
@@ -74,15 +85,28 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (document.getText(selection) && lineStart !== selection.end.line) {
         const lineEnd = selection.end.line
         for (let i = lineStart; i < lineEnd; i++) {
-          insertSemi(i)
+          insertSemiAtEnd(i)
         }
       } else if (!lines.includes(lineStart)) {
         lines.push(lineStart)
-        insertSemi(lineStart)
+        insertSemiAtEnd(lineStart)
       }
     }
 
-    function insertSemi(lineIndex: number) {
+    function getSemiPair(text: string) {
+      const semiPairs: [number, number][] = []
+      for (let i = 0; i < text.length; ) {
+        const start = text.indexOf('"', i)
+        if (start === -1) {
+          return semiPairs
+        }
+        const end = text.indexOf('"', start + 1)
+        semiPairs.push([start, end])
+        i = end + 1
+      }
+    }
+
+    function insertSemiAtEnd(lineIndex: number) {
       const { text } = document.lineAt(lineIndex)
 
       const textTrimEnd = text.trimEnd()
@@ -90,7 +114,11 @@ export function activate(ctx: vscode.ExtensionContext) {
         const pos = textTrimEnd.length - 1
 
         if (textTrimEnd[pos] !== semi) {
-          return edit.insert(new vscode.Position(lineIndex, pos + 1), semi)
+          if (/^\s*for\b/.test(text)) {
+            edit.insert(selection.active, ';')
+          } else {
+            return edit.insert(new vscode.Position(lineIndex, pos + 1), semi)
+          }
         } else {
           const long = textTrimEnd.slice(0, pos)
           const short = long.trimEnd()
@@ -134,6 +162,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     edit.delete(s)
   })
+
   vscode.commands.registerTextEditorCommand('wonderland.removeClosingTag', (editor, edit) => {
     const { document, selection } = editor
 
@@ -144,6 +173,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     edit.replace(range, dst)
   })
+
   vscode.commands.registerTextEditorCommand('wonderland.SORT', (editor, edit) => {
     const { document, selection } = editor
 
@@ -395,6 +425,31 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
   })
 
+  vscode.commands.registerTextEditorCommand('wonderland.javaPrintln', (editor, edit) => {
+    console.log()
+    const { document, selection } = editor
+    const textLine = document.lineAt(selection.active.line)
+    const preSpaces = repeatSpaces(textLine.firstNonWhitespaceCharacterIndex)
+
+    edit.replace(
+      textLine.range,
+      `${preSpaces}System.out.println(${textLine.text.trim().replace(';', '')});`
+    )
+
+    // const dst = text.replace(/<\s*[a-zA-Z\d]+\s+(.*?)>.*/, '<div $1 />')
+
+    // let re = /^(.*?)(\w+)\s+as\s+([\w.]+)/
+    // re = /^(.*?)(\w+)\s+as\s+([\w.]+(?:\s*&\s*[\w.]+)*)/
+
+    // if (re.test(text)) {
+    //   const newString = text.replace(re, function (_match, p1, p2, p3) {
+    //     return `${p1}<${p3}>${p2}`
+    //   })
+
+    //   return edit.replace(range, newString)
+    // }
+  })
+
   vscode.commands.registerTextEditorCommand('wonderland.moveImportToTop', (editor, edit) => {
     const { document, selection } = editor
 
@@ -476,15 +531,28 @@ export function activate(ctx: vscode.ExtensionContext) {
     const { text, range } = document.lineAt(line)
 
     const join = langObject?.letConst.join('|')
-    const re = new RegExp(String.raw`^(\s*(?:${join})\s+)(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
+    // const re = new RegExp(String.raw`^(\s*(?:${join})\s+)?(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
+    const re = new RegExp(String.raw`^(\s*(?:(?:${join})\s+)?)(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
 
-    if (re.test(text)) {
-      const newString = text.replace(re, (_match, prefix, dest, p3, src) => {
+    if (selection.isSingleLine && re.test(text)) {
+      const newString = text.replace(re, (_match, prefix: string, dest, p3, src) => {
         let w = dest === src ? dest : `${src}: ${dest}`
-        return `${prefix}{ ${w} } = ${p3}`
+        if (prefix.trim()) {
+          return `${prefix}{ ${w} } = ${p3}`
+        } else {
+          return `${prefix};({ ${w} } = ${p3})`
+        }
       })
 
       return edit.replace(range, newString)
+    } else {
+      let [callLine, varLine] = document.getText(selection).split('\n')
+      let [, indent, statement] = /^(\s*).*(=.*)/.exec(callLine)!
+      let [, aliasName, propName] = /\s*(.*?)\s*=\s*(?:(?:[^?]*)\??\.(\w+))/.exec(varLine)!
+
+      let newString = `${indent};({ ${propName}: ${aliasName} } ${statement})\n`
+      editor.selection = new vscode.Selection(selection.end, selection.end)
+      edit.replace(selection, newString)
     }
   })
   vscode.commands.registerTextEditorCommand('wonderland.InterfaceOrType', (editor, edit) => {
@@ -603,13 +671,43 @@ export function activate(ctx: vscode.ExtensionContext) {
       langObject?.ctrlPlusg(editor, edit)
     })
   )
+
+  ctx.subscriptions.push(
+    vscode.commands.registerTextEditorCommand('wonderland.ctrlShiftQ', (editor, edit) => {
+      const langObject = getInstance(editor.document.languageId as Language)!
+
+      const { document, selection } = editor
+
+      let re = /\bvar\b(.+\bnew\b\s+([\w<>]+))/
+      let { text, range } = document.lineAt(selection.active)
+      if (langObject.languageId === 'csharp' && re.test(text)) {
+        const dsc = text.replace(re, '$2$1')
+
+        edit.replace(range, dsc)
+      } else if ((text = langObject.rewriteLine(editor, edit))) {
+        vscode.env.clipboard.writeText(text.replace(/;\s*$/, ''))
+      }
+    })
+  )
   ctx.subscriptions.push(
     vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusq', (editor, edit) => {
       const langObject = getInstance(editor.document.languageId as Language)!
 
-      const text = langObject.rewriteLine(editor, edit)
+      const { document, selection } = editor
 
-      if (text) {
+      // let re = /\bvar\b(.+\bnew\b\s+(.*>))/
+      // var tracksBindingSource = new BindingSource();
+      let re = /\bvar\b(.+\bnew\b\s+([\w<>]+))/
+      let { text, range } = document.lineAt(selection.active)
+      if (langObject.languageId === 'csharp' && re.test(text)) {
+        const dsc = text.replace(re, '$2$1')
+
+        edit.replace(range, dsc)
+      }
+      //       else if ((text = langObject.rewriteLine(editor, edit))) {
+      //         vscode.env.clipboard.writeText(text)
+      //       }
+      else if ((text = text.trim())) {
         vscode.env.clipboard.writeText(text)
       }
     })
