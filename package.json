@@ -131,7 +131,7 @@
       {
         "command": "wonderland.insertSemicolon",
         "key": ";",
-        "when": "editorLangId == csharp || editorLangId == aspnetcorerazor || editorLangId == sql || editorLangId == css || editorLangId == rust || editorLangId == java"
+        "when": "editorTextFocus && (editorLangId == csharp || editorLangId == aspnetcorerazor || editorLangId == sql || editorLangId == css || editorLangId == rust || editorLangId == java)"
       },
       {
         "command": "wonderland.javaPrintln",

@@ -185,7 +185,11 @@ export class Base {
     const selection = editor.selection
     let lineIndex = selection.active.line
     let { text, line } = this.textAndLine(editor.document, lineIndex)
-
+    let aa = 1,
+      bb = 1
+    console.log((aa && bb) || aa == 1)
+    console.log(aa && (bb || aa == 1))
+    console.log(aa, bb)
     // 删除当前行内容，    保留缩进
     // 如果仅仅只有空格, 不保留缩进, 移到行首
     // const [spaces, content] = text.match(/^(?:\s*)(?=\S)/)?.[0] ?? ''

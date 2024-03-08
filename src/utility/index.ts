@@ -14,6 +14,7 @@ export const LanguageInstances = {
   rust: commonUtility,
   jsonc: commonUtility,
   java: commonUtility,
+  xml: commonUtility,
   yaml: commonUtility,
   aspnetcorerazor: commonUtility,
   powershell: commonUtility,

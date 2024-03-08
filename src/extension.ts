@@ -1,11 +1,9 @@
-// import {workspace} from 'vscode'
 import type { Language } from './utility/'
 import { checkVue } from './utility/base'
 import { lineEndings } from './utility/base'
 import * as vscode from 'vscode'
 import { LanguageInstances } from './utility'
 import { StatusBar, AutoSave } from './save/autoSave'
-// import { fuck } from './aa'
 
 type LanguageTypes = keyof typeof LanguageInstances
 type Instances = {
@@ -25,20 +23,22 @@ function getLangObject<K extends LanguageTypes>(key: K): Instances[K] {
 }
 
 export function activate(ctx: vscode.ExtensionContext) {
-  // ctx.subscriptions.push(new DocumentWatcher())
-
-  // fuck(ctx)
-
   if (vscode.workspace.workspaceFolders) {
     let statusBar = new StatusBar()
     ctx.subscriptions.push(
       vscode.commands.registerCommand('wonderland.focusChange', () => {
+        const autoSaveValue = statusBar.current
+
         const config = vscode.workspace.getConfiguration()
+
         config.update(
           'files.autoSave',
-          statusBar.current === 'onFocusChange' ? AutoSave.off : AutoSave.onFocusChange
+          autoSaveValue === 'onFocusChange' ? AutoSave.off : AutoSave.onFocusChange
         )
-        config.update('editor.formatOnSave', true)
+        // config.update('editor.formatOnSave', autoSaveValue === 'onFocusChange' ? false : true)
+        if (autoSaveValue !== 'onFocusChange') {
+          config.update('editor.formatOnSave', true)
+        }
       })
     )
     ctx.subscriptions.push(
@@ -177,20 +177,26 @@ export function activate(ctx: vscode.ExtensionContext) {
   vscode.commands.registerTextEditorCommand('wonderland.SORT', (editor, edit) => {
     const { document, selection } = editor
 
-    let [, quote, src] = document.getText(selection).match(/("?)(.+)\1/)!
-    // src = src.slice(2)
-    src = src.replace('--', '')
-    const dst = [
-      ...new Set(
-        src
-          .split(',')
-          .map((e) => e.trim().toLowerCase())
-          // .map((e) => e.toLowerCase())
-          .filter((e) => e.length > 4)
-      ),
-    ]
-      .sort()
-      .join(',')
+    let [, quote, src] = document.getText(selection).match(/("?)-*(.+)\1/)!
+    // src = src.replace('--', '')
+
+    const map: Map<string, string> = new Map()
+    // const arr = src.split(',')
+    // const arr = src.split(',').filter((e) => Boolean(e.trim()))
+    const arr = src.split(',').filter((e) => e.trim())
+    for (let i = 0; i < arr.length; i++) {
+      // const word = arr[i].trim()
+      const word = arr[i]
+
+      let wordIgnore = word.toLowerCase()
+      if (!map.has(wordIgnore)) {
+        map.set(wordIgnore, word)
+      } else if (map.get(wordIgnore) !== word) {
+        map.set(wordIgnore, word.toUpperCase())
+      }
+    }
+
+    const dst = [...map.values()].sort(Intl.Collator().compare).join(',')
 
     edit.replace(selection, `${quote}--${dst}${quote}`)
   })
@@ -431,10 +437,17 @@ export function activate(ctx: vscode.ExtensionContext) {
     const textLine = document.lineAt(selection.active.line)
     const preSpaces = repeatSpaces(textLine.firstNonWhitespaceCharacterIndex)
 
-    edit.replace(
-      textLine.range,
-      `${preSpaces}System.out.println(${textLine.text.trim().replace(';', '')});`
-    )
+    const SOP = 'System.out.println'
+    const { text } = textLine
+
+    if (text.includes(SOP)) {
+      const re = new RegExp(String.raw`${SOP}\((.*)\)`)
+      edit.replace(textLine.range, `${preSpaces}${re.exec(text)![1]};`)
+    } else {
+      edit.replace(textLine.range, `${preSpaces}${SOP}(${textLine.text.trim().replace(';', '')});`)
+    }
+
+    // const re = new RegExp(String.raw`^(\s*(?:(?:${join})\s+)?)(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
 
     // const dst = text.replace(/<\s*[a-zA-Z\d]+\s+(.*?)>.*/, '<div $1 />')
 
