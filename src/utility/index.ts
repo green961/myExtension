@@ -16,6 +16,7 @@ export const LanguageInstances = {
   java: commonUtility,
   xml: commonUtility,
   yaml: commonUtility,
+  proto3: commonUtility,
   aspnetcorerazor: commonUtility,
   powershell: commonUtility,
   csharp: commonUtility,

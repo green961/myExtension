@@ -51,8 +51,8 @@ export class Base {
         return
       case 'typescript':
         this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-nocheck`)
-        this.letConst = ['let', 'const']
-        this.letConstType = ['let', 'const', 'type']
+        this.letConst = ['let', 'const', 'type']
+        // this.letConstType = ['let', 'const', 'type']
         return
       case 'vue':
         this.letConst = ['let', 'const', 'type']
@@ -361,7 +361,7 @@ export class Base {
     let partOfString = String.raw`(\w+\s+)?`
 
     if (this.languageId !== 'csharp') {
-      partOfString = this.letConst?.length ? `((?:${this.letConst.join('|')})\\s+)?` : ''
+      partOfString = this.letConst.length ? `((?:${this.letConst.join('|')})\\s+)?` : ''
     }
     re = new RegExp(String.raw`^(\s*)${partOfString}(\w+)`)
 

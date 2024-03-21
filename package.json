@@ -2,7 +2,7 @@
   "name": "utility-collection",
   "displayName": "Code Editing Operation Enhancements",
   "description": "HelloWorld example for VS Code",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "utility-collection",
   "repository": "https://github.com/Microsoft/vscode-extension-samples/helloworld-sample",
   "engines": {
@@ -131,12 +131,12 @@
       {
         "command": "wonderland.insertSemicolon",
         "key": ";",
-        "when": "editorTextFocus && (editorLangId == csharp || editorLangId == aspnetcorerazor || editorLangId == sql || editorLangId == css || editorLangId == rust || editorLangId == java)"
+        "when": "editorTextFocus && (editorLangId == csharp || editorLangId == aspnetcorerazor || editorLangId == sql || editorLangId == css || editorLangId == rust || editorLangId == java || editorLangId == proto3)"
       },
       {
-        "command": "wonderland.javaPrintln",
+        "command": "wonderland.Println",
         "key": "ctrl+k ctrl+p",
-        "when": "editorLangId == java"
+        "when": "editorLangId == java || editorLangId == python"
       },
       {
         "command": "wonderland.moveImportToTop",
@@ -171,6 +171,11 @@
       {
         "command": "wonderland.ctrlPlusq",
         "key": "ctrl+q",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "wonderland.Uncapitalize",
+        "key": "ctrl+k ctrl+e",
         "when": "editorTextFocus"
       },
       {

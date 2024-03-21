@@ -57,6 +57,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     // 行尾加分号
     const semi = ';'
     const { document, selections, selection } = editor
+    // const langObject = getInstance(editor.document.languageId as Language)
 
     if (selections.length === 1 && selection.start.line === selection.end.line) {
       const { line } = selection.active
@@ -67,6 +68,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         const char = selection.active.character
         const { text } = textLine
 
+        // langObject.languageId !== 'proto3' &&
         if (getSemiPair(text).some(([start, end]) => char > start && char <= end)) {
           edit.insert(selection.active, ';')
         } else {
@@ -431,20 +433,33 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
   })
 
-  vscode.commands.registerTextEditorCommand('wonderland.javaPrintln', (editor, edit) => {
+  vscode.commands.registerTextEditorCommand('wonderland.Println', (editor, edit) => {
     console.log()
     const { document, selection } = editor
     const textLine = document.lineAt(selection.active.line)
     const preSpaces = repeatSpaces(textLine.firstNonWhitespaceCharacterIndex)
-
-    const SOP = 'System.out.println'
     const { text } = textLine
 
-    if (text.includes(SOP)) {
-      const re = new RegExp(String.raw`${SOP}\((.*)\)`)
-      edit.replace(textLine.range, `${preSpaces}${re.exec(text)![1]};`)
-    } else {
-      edit.replace(textLine.range, `${preSpaces}${SOP}(${textLine.text.trim().replace(';', '')});`)
+    let languageId = editor.document.languageId as Language
+    if (languageId === 'python') {
+      const PRINT = 'print'
+
+      const re = new RegExp(String.raw`${PRINT}\((.*)\)`)
+      // if (text.includes(PRINT)) {
+      if (re.test(text)) {
+        edit.replace(textLine.range, `${preSpaces}${re.exec(text)[1]}`)
+      } else {
+        edit.replace(textLine.range, `${preSpaces}${PRINT}(${text.trim()})`)
+      }
+    } else if (languageId === 'java') {
+      const SOP = 'System.out.println'
+
+      if (text.includes(SOP)) {
+        const re = new RegExp(String.raw`${SOP}\((.*)\)`)
+        edit.replace(textLine.range, `${preSpaces}${re.exec(text)![1]};`)
+      } else {
+        edit.replace(textLine.range, `${preSpaces}${SOP}(${textLine.text.trim().replace(';', '')});`)
+      }
     }
 
     // const re = new RegExp(String.raw`^(\s*(?:(?:${join})\s+)?)(.*?)\s*=\s*(?:([^?]*)\??\.(\w+))`)
@@ -702,25 +717,48 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
     })
   )
+
+  ctx.subscriptions.push(
+    vscode.commands.registerTextEditorCommand('wonderland.Uncapitalize', async (editor, edit) => {
+      const langObject = getInstance(editor.document.languageId as Language)!
+      const { document, selection } = editor
+
+      const wordRange = document.getWordRangeAtPosition(selection.active)
+      const word = document.getText(wordRange)
+      const unCapitalize = word[0].toLowerCase() + word.slice(1)
+
+      if (langObject.languageId === 'typescript') {
+        // 如果是`typescript`那就仅复制 FindOneUserDto
+        // findOneUser(findOneUserDto: FindOneUserDto) {
+        vscode.env.clipboard.writeText(unCapitalize)
+      } else {
+        edit.replace(wordRange, unCapitalize)
+      }
+
+      // 用这两个命令在 ctrl+z 的时候会有中间结果`update_user_dto`
+      // update(@Param('id', ParseIntPipe) id: number, @Body() updateUserDto: update_user_dto) {
+
+      // await vscode.commands.executeCommand('editor.action.transformToSnakecase')
+      // await vscode.commands.executeCommand('editor.action.transformToCamelcase')
+    })
+  )
+
   ctx.subscriptions.push(
     vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusq', (editor, edit) => {
-      const langObject = getInstance(editor.document.languageId as Language)!
+      const langObject = getInstance(editor.document.languageId as Language)
 
       const { document, selection } = editor
 
-      // let re = /\bvar\b(.+\bnew\b\s+(.*>))/
-      // var tracksBindingSource = new BindingSource();
-      let re = /\bvar\b(.+\bnew\b\s+([\w<>]+))/
       let { text, range } = document.lineAt(selection.active)
-      if (langObject.languageId === 'csharp' && re.test(text)) {
-        const dsc = text.replace(re, '$2$1')
 
-        edit.replace(range, dsc)
-      }
-      //       else if ((text = langObject.rewriteLine(editor, edit))) {
-      //         vscode.env.clipboard.writeText(text)
-      //       }
-      else if ((text = text.trim())) {
+      if (langObject.languageId === 'csharp') {
+        const re = /\bvar\b(.+\bnew\b\s+([\w<>]+))/
+        if (re.test(text)) {
+          const dsc = text.replace(re, '$2$1')
+
+          edit.replace(range, dsc)
+        }
+      } else if ((text = text.trim())) {
         vscode.env.clipboard.writeText(text)
       }
     })
