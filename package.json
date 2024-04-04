@@ -55,6 +55,20 @@
           "when": "editorLangId == javascript || editorLangId == typescript"
         },
         {
+          "command": "wonderland.AddJsonTags",
+          "when": "editorLangId == go"
+        },
+              {
+        "command": "wonderland.arrowFunction",
+          "when": "editorLangId == csharp"
+
+      },
+
+        {
+          "command": "wonderland.MethodOrFunction",
+          "when": "editorLangId == go"
+        },
+        {
           "command": "wonderland.CJ",
           "when": "editorLangId == javascript || editorLangId == typescript"
         }
@@ -107,6 +121,16 @@
         "category": "Wonderland"
       },
       {
+        "command": "wonderland.MethodOrFunction",
+        "title": "MethodOrFunction",
+        "category": "Wonderland"
+      },
+      {
+        "command": "wonderland.AddJsonTags",
+        "title": "AddJsonTags",
+        "category": "Wonderland"
+      },
+      {
         "command": "wonderland.CJ",
         "title": "CJ",
         "category": "Wonderland"
@@ -135,18 +159,17 @@
       },
       {
         "command": "wonderland.Println",
-        "key": "ctrl+k ctrl+p",
-        "when": "editorLangId == java || editorLangId == python"
+        "key": "ctrl+k ctrl+p"
       },
-      {
-        "command": "wonderland.moveImportToTop",
-        "key": "ctrl+up",
-        "when": "editorLangId == typescript || editorLangId == javascript"
-      },
-      {
+       {
         "command": "wonderland.ctrlAltp",
         "key": "ctrl+alt+p",
         "when": "editorLangId == csharp && editorTextFocus"
+      },
+      {
+        "command": "wonderland.splitStatement",
+        "key": "ctrl+k ctrl+q",
+        "when": "editorLangId == go && editorTextFocus"
       },
       {
         "command": "wonderland.ctrlPlusn",

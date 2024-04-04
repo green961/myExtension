@@ -1,9 +1,9 @@
 #! /   usr/bin/env     node
-import { commonUtility } from './utilityCommon'
-import { pyUtility } from './utilityPY'
 import { cfgUtility } from './utilityCFG'
-import { shUtility } from './utilitySH'
+import { commonUtility } from './utilityCommon'
 import { htmlUtility } from './utilityHTML'
+import { pyUtility } from './utilityPY'
+import { shUtility } from './utilitySH'
 
 export const LanguageInstances = {
   javascript: commonUtility,

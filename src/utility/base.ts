@@ -1,5 +1,5 @@
-import * as vscode from 'vscode'
 import type { TextDocument, TextEditor, TextEditorEdit } from 'vscode'
+import * as vscode from 'vscode'
 import type { Language } from './index'
 
 export const lineEndings = {
@@ -58,6 +58,7 @@ export class Base {
         this.letConst = ['let', 'const', 'type']
         return
       case 'yaml':
+      case 'powershell':
         this.singleLineComment = '#'
         return
     }
@@ -138,6 +139,7 @@ export class Base {
         let emptyPosition: vscode.Position | undefined
         let deleteLine: vscode.TextLine | undefined
         let copyLineText = ''
+        let isFirstLine = false
         selections.forEach((e) => {
           let { line, character } = e.active
           const currentLine = document.lineAt(line)
@@ -158,7 +160,13 @@ export class Base {
             emptyPosition = new vscode.Position(line, text.length)
           } else if (!before.trim()) {
             // --放前面立即自减, 保证前后一致的`line`值
-            emptyPosition = new vscode.Position(--line, document.lineAt(line).text.length)
+            // emptyPosition = new vscode.Position(--line, document.lineAt(line).text.length)
+            if (line === 0) {
+              isFirstLine = true
+              emptyPosition = new vscode.Position(line, 0)
+            } else {
+              emptyPosition = new vscode.Position(--line, Infinity)
+            }
           } else {
             copyLineText = text
             deleteLine = currentLine
@@ -166,7 +174,7 @@ export class Base {
         })
 
         if (emptyPosition && deleteLine) {
-          edit.insert(emptyPosition, '\n' + copyLineText)
+          edit.insert(emptyPosition, isFirstLine ? copyLineText + '\n' : '\n' + copyLineText)
           editor.selection = new vscode.Selection(emptyPosition, emptyPosition)
           edit.delete(deleteLine.rangeIncludingLineBreak)
         } else {
@@ -375,9 +383,16 @@ export class Base {
 
     if (!declaWord) {
       if (this.languageId === 'go') {
-        let goUnique = ':='
+        const typeInterface = /type\s+(\w+)\s+interface/
+        if (typeInterface.test(text)) {
+          variableName = typeInterface.exec(text)[1]
 
-        edit.replace(firstRange, `${indent}${variableName}${goUnique}${doc.getText(selection)}`)
+          edit.insert(new vscode.Position(line, Infinity), `\n\t${doc.getText(selection)}`)
+        } else {
+          let goUnique = ':='
+          edit.replace(firstRange, `${indent}${variableName}${goUnique}${doc.getText(selection)}`)
+        }
+
         edit.replace(secondRange, variableName)
         return
       } else declaWord = `${this.letConst[0]} `
