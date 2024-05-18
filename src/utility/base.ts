@@ -1,5 +1,6 @@
 import type { TextDocument, TextEditor, TextEditorEdit } from 'vscode'
 import * as vscode from 'vscode'
+import { getInstance } from '../extension'
 import type { Language } from './index'
 
 export const lineEndings = {
@@ -7,26 +8,24 @@ export const lineEndings = {
   LF: '\n',
 }
 
-function singleLineComment() {
+function singleLineCommentRemove() {
   return ['<!-- ', ' -->']
 }
 
-export const checkVue = (instance: Language, document, startLine) => {
-  if (instance === 'vue') {
-    let scriptEndLine: number
-
-    for (let i = 0; i < document.lineCount; i++) {
+export const determineLang = (instance: Language, document, startLine): Language => {
+  if (instance === 'vue' || instance === 'html') {
+    for (let i = startLine - 1; i >= 0; i--) {
       const { text } = document.lineAt(i)
-      if (/^\s*<\/script/.test(text)) {
-        scriptEndLine = i
-        break
+      if (/<\/script>/.test(text)) {
+        return
+      }
+
+      if (/^\s*<script/.test(text)) {
+        return 'javascript'
       }
     }
-    if (startLine > scriptEndLine!) {
-      return 'html'
-    } else {
-      return 'typescript'
-    }
+
+    // return instance
   }
 }
 
@@ -44,32 +43,46 @@ export class Base {
     switch (languageId) {
       case 'rust':
         this.letConst = ['let']
-        return
+        break
       case 'javascript':
         this.letConst = ['let', 'const']
         this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-check`)
-        return
+        break
       case 'typescript':
         this.startDetection = new RegExp(String.raw`${this.singleLineComment}\s*@ts-nocheck`)
         this.letConst = ['let', 'const', 'type']
-        // this.letConstType = ['let', 'const', 'type']
-        return
+        break
       case 'vue':
         this.letConst = ['let', 'const', 'type']
-        return
+        break
+      case 'sql':
+        this.singleLineComment = '--'
+        break
       case 'yaml':
       case 'powershell':
+      case 'dockercompose':
+      case 'dockerfile':
+      case 'env':
         this.singleLineComment = '#'
-        return
+        break
     }
   }
 
-  addComments(text: string, lang: Language = this.languageId!) {
+  addComments(text: string) {
     let [, intendent, str] = /^(\s*)(.*)/.exec(text)!
+
+    const lang = this.languageId
     if (lang === 'html') {
-      let [start, end] = singleLineComment()
+      let [start, end] = singleLineCommentRemove()
       return `${intendent}${start}${str}${end}`
     }
+
+    // let { singleLineComment } = this
+    // if (this.languageId !== lang) {
+    //   const langObject = getInstance(lang)
+    //   singleLineComment = langObject.singleLineComment
+    // }
+
     return `${intendent}${this.singleLineComment} ${str}`
   }
 
@@ -82,7 +95,6 @@ export class Base {
     let functionRe = /^\s*static\s+([a-z]+)\s+([a-z]+)\s*\((.*)\)/i
     if (selections.some((s) => functionRe.test(document.lineAt(s.active.line).text))) {
       let [isEmpty, notEmpty] = [...selections].sort((s) => {
-        // const { text } = this.textAndLine(document, a.active.line)
         const { text } = document.lineAt(s.active.line)
         return functionRe.test(text) ? 1 : -1
       })
@@ -105,6 +117,19 @@ export class Base {
     }
   }
 
+  ctrlAltPlusy(editor: TextEditor, edit: TextEditorEdit) {
+    editor.selections.forEach((selection) => {
+      let lineIndex = selection.active.line
+      let { text, line } = this.textAndLine(editor.document, lineIndex)
+
+      let [, spaces, content] = text.match(/^(\s*)(\S.*)?/)
+
+      if (!content) spaces = ''
+
+      edit.replace(line.range, spaces)
+    })
+  }
+
   ctrlPlusy(editor: TextEditor, edit: TextEditorEdit) {
     const { document, selections, selection } = editor
 
@@ -124,8 +149,14 @@ export class Base {
           let { isEmpty, notEmpty } = this.emptyAndNotEmpty(document, selections)
           let value = document.getText(notEmpty)
 
-          if (!value.includes('\n')) {
-            vscode.env.clipboard.writeText(value.trim())
+          // if (!value.includes('\n')) {
+          if (notEmpty.isSingleLine) {
+            // vscode.env.clipboard.writeText(value.trim())
+
+            // "body": "${1|type,input|} $0 {\n}\n"
+            // "body": "type" 在字符串里面, 空格不是多余的
+
+            vscode.env.clipboard.writeText(value)
           }
 
           edit.insert(isEmpty.active, value)
@@ -193,11 +224,7 @@ export class Base {
     const selection = editor.selection
     let lineIndex = selection.active.line
     let { text, line } = this.textAndLine(editor.document, lineIndex)
-    let aa = 1,
-      bb = 1
-    console.log((aa && bb) || aa == 1)
-    console.log(aa && (bb || aa == 1))
-    console.log(aa, bb)
+
     // 删除当前行内容，    保留缩进
     // 如果仅仅只有空格, 不保留缩进, 移到行首
     // const [spaces, content] = text.match(/^(?:\s*)(?=\S)/)?.[0] ?? ''
@@ -210,25 +237,29 @@ export class Base {
     return content?.trimEnd()
   }
 
-  ctrlPlusg(editor: TextEditor, edit: TextEditorEdit) {
-    const { document: doc, selection } = editor
-    const lineIndex = selection.active.line
-    const { text } = this.textAndLine(doc, lineIndex)
-    const re = /^(\s*)(get)(\s*=>\s*.*)(;)/
-    if (re.test(text)) {
-      const newString = text.replace(re, function (_match, p1, _, p3) {
-        return `${p1}set${p3} = value;\n`
-        // return `\n${p1}set${p3} = value;`
-      })
+  ctrlPlusg(editor: TextEditor) {
+    const { document, selections } = editor
 
-      const pos = new vscode.Position(lineIndex + 1, 0)
-      // const pos = new vscode.Position(lineIndex, text.length)
-      edit.insert(pos, newString)
-      editor.selection = new vscode.Selection(pos, pos)
-      // editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
-    } else {
-      editor.selection = new vscode.Selection(lineIndex, text.length, lineIndex, text.length)
-    }
+    // const re = /^(\s*)(get)(\s*=>\s*.*)(;)/
+    // if (re.test(document.lineAt(selection.active.line).text)) {
+    //   const lineIndex = selection.active.line
+    //   const { text } = document.lineAt(selection.active.line)
+    //   const newString = text.replace(re, function (_match, p1, _, p3) {
+    //     return `${p1}set${p3} = value;\n`
+    //   })
+
+    //   const pos = new vscode.Position(lineIndex + 1, 0)
+    //   edit.insert(pos, newString)
+    //   editor.selection = new vscode.Selection(pos, pos)
+    // } else {
+
+    editor.selections = selections.map((selection) => {
+      const { line } = selection.active
+
+      const { length } = document.lineAt(line).text
+
+      return new vscode.Selection(line, length, line, length)
+    })
   }
 
   async ctrlPlusn(editor: TextEditor, edit: TextEditorEdit) {
@@ -237,12 +268,11 @@ export class Base {
     let end_of_line = lineEndings[vscode.EndOfLine[document.eol]]
 
     if (selections.length === 1) {
-      // if (startLine !== selection.end.line && !selection.start.character) {
       if (startLine !== selection.end.line) {
         // 多行，先备份再修改
 
-        if (this.languageId === 'html' || checkVue(this.languageId, document, startLine) === 'html') {
-          let [start, end] = singleLineComment()
+        if (this.languageId === 'html' || determineLang(this.languageId, document, startLine) === 'html') {
+          let [start, end] = singleLineCommentRemove()
           let indentSpaces = document.lineAt(startLine).firstNonWhitespaceCharacterIndex
 
           return edit.insert(
@@ -273,9 +303,19 @@ export class Base {
         // 单行，先备份再修改
         let { text: currentLineText, isEmptyOrWhitespace } = document.lineAt(startLine)
         if (isEmptyOrWhitespace) return
-        if (currentLineText.trim().startsWith(this.singleLineComment)) {
-          let i = currentLineText.indexOf(this.singleLineComment)
-          let j = i + this.singleLineComment.length
+
+        let langObject: Base = this
+        if (langObject.languageId === 'html') {
+          let lang = determineLang(langObject.languageId, document, startLine)
+          if (lang) {
+            langObject = getInstance(lang)
+          }
+        }
+
+        const { singleLineComment: slc } = langObject
+        if (currentLineText.trim().startsWith(slc)) {
+          let i = currentLineText.indexOf(slc)
+          let j = i + slc.length
           for (; j < currentLineText.length; j++) {
             if (currentLineText[j] === ' ') {
               continue
@@ -293,10 +333,7 @@ export class Base {
 
         return edit.insert(
           new vscode.Position(startLine, 0),
-          `${this.addComments(
-            currentLineText,
-            checkVue(this.languageId, document, startLine)
-          )}${end_of_line}`
+          `${langObject.addComments(currentLineText)}${end_of_line}`
         )
       }
     } else {
@@ -320,10 +357,16 @@ export class Base {
             edit.replace(notEmpty, `${indent}Hey *${structName}`)
             return
           }
-          // 提取表达式（放在指定行）￥
-          this.extractVariable(emptySelectedPos.line, document, notEmpty, edit)
+
+          let langObject: Base = this
+          if (langObject.languageId === 'html') {
+            langObject = getInstance('javascript')
+          }
+
+          // 提取表达式（放在指定行）
+          langObject.extractVariable(emptySelectedPos.line, document, notEmpty, edit)
         } else {
-          // shellscript 提取表达式（需先选中）成变量（放在指定位置）￥
+          // shellscript 提取表达式（需先选中）成变量（放在指定位置）
           const emptyLine = this.textAndLine(document, emptySelectedPos.line)
           const position = emptySelectedPos.character
           const variableName = /(\w+)=/.exec(emptyLine.text.slice(0, position))![1]
@@ -340,6 +383,21 @@ export class Base {
 
           edit.insert(emptySelectedPos, insertText)
           edit.replace(notEmpty, variableName)
+        }
+      } else if (this.languageId === 'python' && selections.length === 2) {
+        const [lineA, lineB] = selections.map((s) => {
+          let { rangeIncludingLineBreak, text } = document.lineAt(s.active.line)
+
+          const wordRange = document.getWordRangeAtPosition(s.active)
+          const word = wordRange && document.getText(wordRange)
+          return { rangeIncludingLineBreak, text, word, wordRange }
+        })
+
+        if (!lineB.word || lineB.text.includes(lineA.word)) {
+          edit.delete(lineB.rangeIncludingLineBreak)
+          edit.replace(lineA.wordRange, lineB.text.split('=')[1].trim())
+          editor.selection = selection
+        } else if (lineA.word) {
         }
       }
     }

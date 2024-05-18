@@ -2,7 +2,7 @@ import * as vscode from 'vscode'
 import { AutoSave, StatusBar } from './save/autoSave'
 import { LanguageInstances } from './utility'
 import type { Language } from './utility/'
-import { checkVue, lineEndings } from './utility/base'
+import { determineLang, lineEndings } from './utility/base'
 // import { text } from 'stream/consumers'
 
 type LanguageTypes = keyof typeof LanguageInstances
@@ -62,6 +62,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       const { line } = selection.active
 
       const textLine = document.lineAt(line)
+
       const pos = insertSemiAtEnd(line)
       if (pos) {
         const char = selection.active.character
@@ -165,7 +166,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   vscode.commands.registerTextEditorCommand('wonderland.SORT', (editor, edit) => {
     const { document, selection } = editor
 
-    let [, quote, src] = document.getText(selection).match(/("?)-*(.+)\1/)!
+    let [, quote, henxian, src] = document.getText(selection).match(/("?)(-*)(.+)\1/)!
 
     const map: Map<string, string> = new Map()
     const arr = src.split(',').filter((e) => e.trim())
@@ -182,7 +183,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
     const dst = [...map.values()].sort(Intl.Collator().compare).join(',')
 
-    edit.replace(selection, `${quote}--${dst}${quote}`)
+    edit.replace(selection, `${quote}${henxian}${dst}${quote}`)
   })
 
   vscode.commands.registerTextEditorCommand('wonderland.packageReference', async (editor) => {
@@ -261,18 +262,107 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
   })
 
+  vscode.commands.registerTextEditorCommand('wonderland.convert&&2If', async (editor, edit) => {
+    const { document, selection } = editor
+    const { line } = selection.active
+    const { text, range } = document.lineAt(line)
+
+    let aa = new RegExp(String.raw`^(\s*)(.*)\s*&&\s*(.*)`)
+    aa = /^(\s*)(.*?)\s*&&\s*(.*)/
+
+    let [, indent, ifConditon, statement] = aa.exec(text)
+
+    let content = [`if (${ifConditon}) {`, `${repeatSpaces(2)}${statement}`, '}']
+      .map((e) => `${indent}${e}`)
+      .join('\n')
+
+    edit.replace(range, content)
+  })
+
+  vscode.commands.registerTextEditorCommand('wonderland.convertIf2&&', async (editor, edit) => {
+    const { document, selection } = editor
+    const selectionContent = document.getText(selection)
+    let [first, second, ...tail] = selectionContent.split('\n')
+    let addN = tail.some((e) => !e.trim())
+
+    const matchContent = /(\s*)if\s*\((.*)\)/.exec(first)
+    if (!matchContent) {
+      return
+    }
+
+    const indent = matchContent[1]
+    first = matchContent[2]
+    second = second.trim()
+
+    const text = `${indent}${first} && (${second})${addN ? '\n' : ''}`
+
+    edit.replace(selection, text)
+    editor.selection = new vscode.Selection(selection.end, selection.end)
+  })
+
+  vscode.commands.registerTextEditorCommand('wonderland.hollyShit', async (editor) => {
+    function generate(name: string, arg: string, type: string) {
+      let ss = arg ? `@Args('${arg}') ${arg}` : ''
+      return [`@${type}('${name}')`, `async ${name}(${ss}) {\n\n}`].join('\n')
+    }
+    function concat(lineContent: string, type: string) {
+      let [_, name, arg] = extract.exec(lineContent)
+      result.push(generate(name, arg, type))
+    }
+
+    let content = (await vscode.env.clipboard.readText()).trim()
+
+    const { selection } = editor
+
+    let isTypeQuery = false
+    const typeQuery = /\btype\s+Query\b/
+    const extract = /^\s*(\w+)\s*(?:\((\w+):.*\))?\s*:/
+
+    let isMutationQuery = false
+    const mutationQuery = /\btype\s+Mutation\b/
+
+    let result = []
+    let aa = content.split('\n')
+    for (let i = 0; i < aa.length; i++) {
+      let lineContent = aa[i]
+
+      if (lineContent.trim() === '') {
+        continue
+      } else if (!isTypeQuery && typeQuery.test(lineContent)) {
+        isTypeQuery = true
+        continue
+      } else if (!isMutationQuery && mutationQuery.test(lineContent)) {
+        isMutationQuery = true
+        continue
+      }
+
+      if (lineContent.trim() === '}') {
+        isTypeQuery = isMutationQuery = false
+      }
+
+      if (extract.test(lineContent)) {
+        concat(lineContent, isTypeQuery ? 'Query' : 'Mutation')
+      }
+    }
+
+    let str = result.join('\n\n')
+
+    editor.edit((editBuilder) => {
+      editBuilder.insert(selection.active, `\n${str}`)
+    })
+  })
+
   vscode.commands.registerTextEditorCommand('wonderland.convertAsToBracket', (editor, edit) => {
     // 还是想得太简单了
     const langObject = getInstance(editor.document.languageId as Language)!
     if (langObject?.languageId !== 'typescript') return
 
     const { document, selection } = editor
-    const line = selection.start.line
+    const { line } = selection.start
     const { text, range } = document.lineAt(line)
 
     let re = /^(.*?)(\w+)\s+as\s+([\w.]+)/
 
-    // input: '  } as Shell & Options&Fuck&Pussy,'
     re = /^(.*?)(\w+)\s+as\s+([\w.]+(?:\s*&\s*[\w.]+)*)/
 
     if (re.test(text)) {
@@ -426,7 +516,6 @@ export function activate(ctx: vscode.ExtensionContext) {
       const PRINT = 'print'
 
       const re = new RegExp(String.raw`${PRINT}\((.*)\)`)
-      // if (text.includes(PRINT)) {
       if (re.test(text)) {
         edit.replace(textLine.range, `${preSpaces}${re.exec(text)[1]}`)
       } else {
@@ -441,18 +530,21 @@ export function activate(ctx: vscode.ExtensionContext) {
       } else {
         edit.replace(textLine.range, `${preSpaces}${SOP}(${textLine.text.trim().replace(';', '')});`)
       }
-    } else if (languageId === 'typescript') {
+    } else if (languageId === 'typescript' || languageId === 'javascript') {
       const CL = 'console.log'
 
       if (text.includes(CL)) {
         const re = new RegExp(String.raw`${CL}\((.*)\)`)
         edit.replace(textLine.range, `${preSpaces}${re.exec(text)![1]}`)
       } else {
-        edit.replace(textLine.range, `${preSpaces}${CL}(${textLine.text.trim().replace(';', '')})`)
+        const selectionText = document.getText(selection)
+        if (selectionText.trim()) {
+          edit.replace(selection, `${CL}(${selectionText})`)
+        } else {
+          edit.replace(textLine.range, `${preSpaces}${CL}(${textLine.text.trim().replace(';', '')})`)
+        }
       }
     } else if (languageId === 'go') {
-      // fmt.Println(Fuck())
-
       const FP = 'fmt.Println'
 
       if (text.includes(FP)) {
@@ -563,16 +655,26 @@ export function activate(ctx: vscode.ExtensionContext) {
     } = selection
 
     editor.edit((editBuilder) => {
+      const re = /\d/
       for (let i = start; i < end; i++) {
-        const { text } = document.lineAt(i)
+        const trimText = document.lineAt(i).text.trim()
+        if (!trimText) {
+          continue
+        }
 
-        let fieldName = text.trim().split(/\s+/)[0]
+        const fieldName = trimText.split(/\s+/)[0]
         const tag = value
           .split('.')
           .map((value) => {
             let field = fieldName[0].toLowerCase()
             for (let i = 1; i < fieldName.length; i++) {
               const char = fieldName[i]
+
+              if (re.test(char)) {
+                field += char
+                continue
+              }
+
               const lowerChar = char.toLowerCase()
               const upperChar = char.toUpperCase()
               field += char === upperChar ? `_${lowerChar}` : char
@@ -619,7 +721,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     const lineIndex = selection.active.line
 
     // let lang: Language = checkVue(langObject, document, lineIndex)!
-    const lang = checkVue(langObject.languageId, document, lineIndex)
+    const lang = determineLang(langObject.languageId, document, lineIndex)
 
     if (langObject.languageId !== 'typescript' && lang !== 'typescript') {
       return
@@ -721,9 +823,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   )
 
   ctx.subscriptions.push(
-    vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusg', (editor, edit) => {
+    vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusg', (editor) => {
       const langObject = getInstance(editor.document.languageId as Language)
-      langObject?.ctrlPlusg(editor, edit)
+      langObject?.ctrlPlusg(editor)
     })
   )
 
@@ -752,14 +854,24 @@ export function activate(ctx: vscode.ExtensionContext) {
 
       const wordRange = document.getWordRangeAtPosition(selection.active)
       const word = document.getText(wordRange)
-      const unCapitalize = word[0].toLowerCase() + word.slice(1)
+
+      const c = word[0]
+      let caseSwitch = `${c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()}${word.slice(1)}`
 
       if (langObject.languageId === 'typescript') {
-        // 如果是`typescript`那就仅复制 FindOneUserDto
-        // findOneUser(findOneUserDto: FindOneUserDto) {
-        vscode.env.clipboard.writeText(unCapitalize)
+        const lineIndex = selection.active.line
+        const re = new RegExp(String.raw`(\w+)\s*:\s*${word}`)
+        const result = re.exec(document.lineAt(lineIndex).text)
+        const tempVar = result[1]
+        const index = result.index
+
+        if (caseSwitch.endsWith('Type')) {
+          caseSwitch = caseSwitch.slice(0, -4)
+        }
+
+        edit.replace(new vscode.Selection(lineIndex, index, lineIndex, index + tempVar.length), caseSwitch)
       } else {
-        edit.replace(wordRange, unCapitalize)
+        edit.replace(wordRange, caseSwitch)
       }
 
       // await vscode.commands.executeCommand('editor.action.transformToSnakecase')
@@ -779,7 +891,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         firstNonWhitespaceCharacterIndex: indentSize,
       } = document.lineAt(selection.active)
 
-      const re = /(?<=\bif)(\s+.*;)/
+      let re = /(?<=\bif)(\s+.*;)/
 
       if (re.test(text)) {
         let extractStr: string
@@ -790,18 +902,25 @@ export function activate(ctx: vscode.ExtensionContext) {
 
         edit.replace(range, `${'\t'.repeat(indentSize)}${extractStr.trim().replace(';', '')}\n${newString}`)
       } else {
-        const { text: textPre, rangeIncludingLineBreak } = document.lineAt(selection.active.line - 1)
+        if (/^\s*if\s+/.test(text)) {
+          const { text: textPre, rangeIncludingLineBreak } = document.lineAt(selection.active.line - 1)
 
-        edit.delete(rangeIncludingLineBreak)
-        const [indent, suffix] = text.split('if ')
+          edit.delete(rangeIncludingLineBreak)
+          const [indent, suffix] = text.split('if ')
 
-        edit.replace(range, indent + 'if ' + textPre.trim() + '; ' + suffix)
+          edit.replace(range, indent + 'if ' + textPre.trim() + '; ' + suffix)
+        } else {
+          re = /(\w+)\s*:=/
+          if (re.test(text)) {
+            const newString = text.replace(re, function (_, varName) {
+              return `var ${varName} =`
+            })
+
+            edit.replace(range, newString)
+          }
+        }
       }
     })
-
-    // if num, err := strconv.Atoi(os.Args[i]); err != nil {
-    // num, err := strconv.Atoi(os.Args[i])
-    // if err != nil {
   )
 
   ctx.subscriptions.push(
@@ -827,7 +946,8 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   ctx.subscriptions.push(
     vscode.commands.registerTextEditorCommand('wonderland.ctrlPlusn', (editor, edit) => {
-      const langObject = getInstance(editor.document.languageId as Language)
+      let id = editor.document.languageId as Language
+      const langObject = getInstance(id)
       langObject?.ctrlPlusn(editor, edit)
     })
   )
@@ -838,6 +958,14 @@ export function activate(ctx: vscode.ExtensionContext) {
       langObject?.ctrlPlusy(editor, edit)
     })
   )
+
+  ctx.subscriptions.push(
+    vscode.commands.registerTextEditorCommand('wonderland.ctrlAltPlusy', (editor, edit) => {
+      const langObject = getInstance(editor.document.languageId as Language)
+      langObject?.ctrlAltPlusy(editor, edit)
+    })
+  )
+
   ctx.subscriptions.push(
     vscode.commands.registerTextEditorCommand('wonderland.ctrlAltp', (editor, edit) => {
       const langObject = getInstance(editor.document.languageId as Language)

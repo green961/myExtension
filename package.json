@@ -1,9 +1,9 @@
 {
   "name": "utility-collection",
-  "displayName": "Code Editing Operation Enhancements",
+  "displayName": "Code Editing",
   "description": "HelloWorld example for VS Code",
   "version": "0.0.2",
-  "publisher": "utility-collection",
+  "publisher": "utility-collection-abk-dist",
   "repository": "https://github.com/Microsoft/vscode-extension-samples/helloworld-sample",
   "engines": {
     "vscode": "^1.81.0"
@@ -39,6 +39,14 @@
           "when": "editorLangId == csharp"
         },
         {
+          "command": "wonderland.convert&&2If",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
+          "command": "wonderland.convertIf2&&",
+          "when": "editorLangId == javascript || editorLangId == typescript"
+        },
+        {
           "command": "wonderland.convertAsToBracket",
           "when": "editorLangId == javascript || editorLangId == typescript"
         },
@@ -58,12 +66,10 @@
           "command": "wonderland.AddJsonTags",
           "when": "editorLangId == go"
         },
-              {
-        "command": "wonderland.arrowFunction",
+        {
+          "command": "wonderland.arrowFunction",
           "when": "editorLangId == csharp"
-
-      },
-
+        },
         {
           "command": "wonderland.MethodOrFunction",
           "when": "editorLangId == go"
@@ -98,6 +104,16 @@
       {
         "command": "wonderland.ofFunction",
         "title": "ofFunction",
+        "category": "Wonderland"
+      },
+      {
+        "command": "wonderland.convert&&2If",
+        "title": "&&if",
+        "category": "Wonderland"
+      },
+      {
+        "command": "wonderland.convertIf2&&",
+        "title": "if&&",
         "category": "Wonderland"
       },
       {
@@ -161,7 +177,12 @@
         "command": "wonderland.Println",
         "key": "ctrl+k ctrl+p"
       },
-       {
+      {
+        "command": "wonderland.moveImportToTop",
+        "key": "ctrl+up",
+        "when": "editorLangId == typescript && editorTextFocus"
+      },
+      {
         "command": "wonderland.ctrlAltp",
         "key": "ctrl+alt+p",
         "when": "editorLangId == csharp && editorTextFocus"
@@ -187,8 +208,8 @@
         "when": "editorTextFocus"
       },
       {
-        "command": "wonderland.ctrlShiftQ",
-        "key": "ctrl+shift+q",
+        "command": "wonderland.ctrlAltPlusy",
+        "key": "ctrl+alt+y",
         "when": "editorTextFocus"
       },
       {
@@ -197,8 +218,13 @@
         "when": "editorTextFocus"
       },
       {
+        "command": "wonderland.ctrlShiftQ",
+        "key": "ctrl+shift+q",
+        "when": "editorTextFocus"
+      },
+      {
         "command": "wonderland.Uncapitalize",
-        "key": "ctrl+k ctrl+e",
+        "key": "ctrl+i",
         "when": "editorTextFocus"
       },
       {

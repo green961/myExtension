@@ -1,10 +1,9 @@
-import { getInstance } from '../extension'
-import { checkVue } from './base'
-import { Base } from './base'
+import type { Range, TextEditor, TextEditorEdit } from 'vscode'
 import * as vscode from 'vscode'
-import type { TextEditor, TextEditorEdit, Range } from 'vscode'
-import type { Remove } from './type'
+import { getInstance } from '../extension'
+import { Base, determineLang } from './base'
 import type { Language } from './index'
+import type { Remove } from './type'
 
 export class commonUtility extends Base implements Remove {
   readonly multiLineComments = ['/*', '*/']
@@ -22,7 +21,7 @@ export class commonUtility extends Base implements Remove {
     const { selection, selections, document } = editor
 
     const lineIndex = selection.active.line
-    const lang = checkVue(this.languageId, document, lineIndex)
+    const lang = determineLang(this.languageId, document, lineIndex)
     if (lang === 'html') {
       getInstance(lang)?.removeComments(editor, edit)
       return
@@ -37,6 +36,9 @@ export class commonUtility extends Base implements Remove {
       ;[startLine, endLine] = [selection.start.line, selection.end.line]
     }
     if (startLine === endLine) return
+    if (startLine === 0 && this.languageId === 'dockerfile') {
+      startLine++
+    }
 
     const mulComments = (currentLine: number, text: string) => {
       let start: [number, number] = [currentLine, text.indexOf(this.multiLineComments[0])]
