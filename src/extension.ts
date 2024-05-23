@@ -575,7 +575,8 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   vscode.commands.registerTextEditorCommand('wonderland.multipleStatements', (editor, edit) => {
     const { document, selection } = editor
-    const indent = '  '
+    // const indent = '  '
+    const indent = repeatSpaces(2)
 
     const lineIndex = selection.active.line
     const textLine = document.lineAt(lineIndex)
@@ -587,6 +588,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       const range = new vscode.Range(lineIndex, end, lineIndex, Infinity)
 
       edit.replace(range, [` {`, `${preSpaces}${indent}${single}`, `${preSpaces}}`].join('\n'))
+    }
+
+    // let [, statement] = /^\s*else\b\s*(.*)/.exec(lineContent) || []
+    let [, el, statement] = /^\s*(}?\s*else)\b\s*(.*)/.exec(lineContent) || []
+    if (statement) {
+      let text = [`${el} {`, `${indent}${statement}`, '}'].map((e) => `${preSpaces}${e}`).join('\n')
+      edit.replace(textLine.range, text)
     }
   })
 
@@ -714,18 +722,14 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   vscode.commands.registerTextEditorCommand('wonderland.InterfaceOrType', (editor, edit) => {
     const langObject = getInstance(editor.document.languageId as Language)
-    if (!langObject) {
-      return
-    }
+    if (!langObject) return
+
     const { document, selection } = editor
     const lineIndex = selection.active.line
 
-    // let lang: Language = checkVue(langObject, document, lineIndex)!
     const lang = determineLang(langObject.languageId, document, lineIndex)
 
-    if (langObject.languageId !== 'typescript' && lang !== 'typescript') {
-      return
-    }
+    if (langObject.languageId !== 'typescript' && lang !== 'typescript') return
 
     const { trimText } = langObject.textAndLine(document, lineIndex)
 
@@ -867,6 +871,8 @@ export function activate(ctx: vscode.ExtensionContext) {
 
         if (caseSwitch.endsWith('Type')) {
           caseSwitch = caseSwitch.slice(0, -4)
+        } else if (caseSwitch.endsWith('Dto')) {
+          caseSwitch = caseSwitch.slice(0, -3)
         }
 
         edit.replace(new vscode.Selection(lineIndex, index, lineIndex, index + tempVar.length), caseSwitch)

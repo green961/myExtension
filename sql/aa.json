@@ -1,0 +1,33 @@
+{
+  "scopeName": "source.js",
+  "patterns": [
+    {
+      "name": "keyword.control.js",
+      "match": "\\b(if|else|for|while|return)\\b"
+    },
+    {
+      "name": "string.quoted.double.js",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.js",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "keyword.control.js",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "",
+          "match": "\\\\."
+        }
+      ]
+    }
+  ],
+  "repository": {},
+  "fileTypes": ["js"]
+}

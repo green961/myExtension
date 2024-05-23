@@ -18,6 +18,8 @@ export const LanguageInstances = {
   yaml: commonUtility,
   dockercompose: commonUtility,
   sql: commonUtility,
+  msql: commonUtility,
+  pg: commonUtility,
   env: commonUtility,
   proto3: commonUtility,
   graphql: commonUtility,

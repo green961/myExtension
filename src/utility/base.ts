@@ -118,14 +118,16 @@ export class Base {
   }
 
   ctrlAltPlusy(editor: TextEditor, edit: TextEditorEdit) {
+    const exists = []
+
     editor.selections.forEach((selection) => {
-      let lineIndex = selection.active.line
-      let { text, line } = this.textAndLine(editor.document, lineIndex)
+      const lineIndex = selection.active.line
+      if (exists.includes(lineIndex)) return
+      else exists.push(lineIndex)
 
+      const { text, line } = this.textAndLine(editor.document, lineIndex)
       let [, spaces, content] = text.match(/^(\s*)(\S.*)?/)
-
       if (!content) spaces = ''
-
       edit.replace(line.range, spaces)
     })
   }
